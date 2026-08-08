@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+*.pyo
+.DS_Store
+
+# Zip produit par build.py — ne pas versionner, se génère à la demande
+Xteink_X3.zip

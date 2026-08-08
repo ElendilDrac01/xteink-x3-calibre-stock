@@ -1,0 +1,129 @@
+msgid ""
+msgstr ""
+"Language: fr\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Plural-Forms: nplurals=2; plural=(n > 1);\n"
+
+msgid "unknown"
+msgstr "inconnu"
+
+msgid "X3 reader management"
+msgstr "Gestion X3 reader"
+
+msgid "Manage books on the Xteink X3"
+msgstr "Gérer les livres sur le Xteink X3"
+
+msgid "Send to Xteink X3"
+msgstr "Envoyer au Xteink X3"
+
+msgid "Manage books on X3"
+msgstr "Gérer les livres sur le X3"
+
+msgid "Saved Xteink address:\n\n%s\n\nDo you want to use this address?"
+msgstr "Adresse Xteink enregistrée :\n\n%s\n\nVoulez-vous utiliser cette adresse ?"
+
+msgid "No Xteink X3 is saved.\n\nDo you want to scan the network?"
+msgstr "Aucune adresse Xteink X3 enregistrée.\n\nVoulez-vous scanner le réseau ?"
+
+msgid "Xteink X3 IP address:"
+msgstr "Adresse IP du Xteink X3 :"
+
+msgid "Searching for Xteink X3 on the network..."
+msgstr "Recherche du Xteink X3 sur le réseau..."
+
+msgid "No Xteink X3 found.\n\nDo you want to enter an IP address manually?"
+msgstr "Aucun Xteink X3 trouvé.\n\nVoulez-vous saisir une adresse IP manuellement ?"
+
+msgid "Xteink X3 found"
+msgstr "Xteink X3 trouvé"
+
+msgid "Xteink X3 found:\n\nIP: %s\nVersion: %s\nID: %s\n\nUse this Xteink?"
+msgstr "Xteink X3 trouvé :\n\nIP : %s\nVersion : %s\nID : %s\n\nUtiliser ce Xteink ?"
+
+msgid "Several Xteink devices found:"
+msgstr "Plusieurs Xteink trouvés :"
+
+msgid "Error while searching:\n\n%s"
+msgstr "Erreur pendant la recherche :\n\n%s"
+
+msgid "No book selected."
+msgstr "Aucun livre sélectionné."
+
+msgid "Please put the Xteink X3 into\n\"PC Transfer\" mode.\n\nOnce the mode is active, click OK."
+msgstr "Veuillez mettre le Xteink X3 en mode\n« Transfert PC ».\n\nUne fois le mode activé, cliquez sur OK."
+
+msgid "Unable to retrieve the EPUB file.\n\n%s"
+msgstr "Impossible de récupérer le fichier EPUB.\n\n%s"
+
+msgid "The selected book has no EPUB format."
+msgstr "Le livre sélectionné ne possède pas de format EPUB."
+
+msgid "Book"
+msgstr "Livre"
+
+msgid "Sending books to Xteink X3..."
+msgstr "Envoi des livres vers le Xteink X3..."
+
+msgid "Reading books stored on the Xteink X3..."
+msgstr "Lecture des livres présents sur le Xteink X3..."
+
+msgid "Unexpected response from the Xteink X3."
+msgstr "Réponse inattendue du Xteink X3."
+
+msgid "No files or folders found on the Xteink X3."
+msgstr "Aucun fichier ou dossier trouvé sur le Xteink X3."
+
+msgid "Select the files or folders to delete:"
+msgstr "Sélectionnez les fichiers ou dossiers à supprimer :"
+
+msgid "Select all"
+msgstr "Tout sélectionner"
+
+msgid "Select none"
+msgstr "Tout désélectionner"
+
+msgid "Delete"
+msgstr "Supprimer"
+
+msgid "Cancel"
+msgstr "Annuler"
+
+msgid "Xteink X3 system folder"
+msgstr "Dossier système du Xteink X3"
+
+msgid "📄 %s  (%.1f MB)"
+msgstr "📄 %s  (%.1f Mo)"
+
+msgid "📄 %s"
+msgstr "📄 %s"
+
+msgid "Confirmation"
+msgstr "Confirmation"
+
+msgid "Do you want to delete the following items?\n\n"
+msgstr "Voulez-vous supprimer les éléments suivants ?\n\n"
+
+msgid "\n\nFor folders, all their contents will also be deleted."
+msgstr "\n\nPour les dossiers, tout leur contenu sera également supprimé."
+
+msgid "Deleting items from the Xteink X3..."
+msgstr "Suppression des éléments du Xteink X3..."
+
+msgid "Error while reading files:\n\n%s"
+msgstr "Erreur lors de la lecture des fichiers :\n\n%s"
+
+msgid "Error while deleting:\n\n%s"
+msgstr "Erreur lors de la suppression :\n\n%s"
+
+msgid "%d item deleted from the Xteink X3."
+msgid_plural "%d items deleted from the Xteink X3."
+msgstr[0] "%d élément supprimé du Xteink X3."
+msgstr[1] "%d éléments supprimés du Xteink X3."
+
+msgid "Sending completed.\n\nX3: %s\nVersion: %s\nID: %s\n\n%d book sent."
+msgid_plural "Sending completed.\n\nX3: %s\nVersion: %s\nID: %s\n\n%d books sent."
+msgstr[0] "Envoi terminé.\n\nX3 : %s\nVersion : %s\nID : %s\n\n%d livre envoyé."
+msgstr[1] "Envoi terminé.\n\nX3 : %s\nVersion : %s\nID : %s\n\n%d livres envoyés."
+
+msgid "Error while sending:\n\n%s"
+msgstr "Erreur lors de l'envoi :\n\n%s"
