@@ -17,6 +17,9 @@ FILES = {
     "src/calibre_plugins/xteink_x3/network.py":
         "network.py",
 
+    "src/calibre_plugins/xteink_x3/images/xteink_x3.png":
+        "images/xteink_x3.png",
+
     "src/calibre_plugins/xteink_x3/translations/fr.mo":
         "translations/fr.mo",
 }

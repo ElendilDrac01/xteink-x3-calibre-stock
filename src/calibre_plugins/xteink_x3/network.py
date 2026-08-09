@@ -1,3 +1,4 @@
+import http.client
 import json
 import mimetypes
 import os
@@ -67,6 +68,12 @@ def initialize_xteink():
     """
     Appel initial nécessaire pour débloquer l'accès
     à l'interface réseau locale du X3.
+
+    Ce comportement vient du firmware stock Xteink lui-même,
+    pas de ce plugin : sans cet appel, /Read_info, /edit et /list
+    ne répondent pas sur le LAN. Voir la section "About the
+    bofi.xteink.com request" du README pour le détail de ce qui
+    est (et n'est pas) envoyé.
     """
     url = "http://bofi.xteink.com/index.html"
 
@@ -297,67 +304,113 @@ def scan_network():
 # Envoi EPUB
 # ----------------------------------------------------------------------
 
-def upload(ip, filename, filepath):
+# Taille des blocs envoyés un par un pendant l'upload. Un compromis
+# entre fréquence de mise à jour de la progression (petit bloc =
+# retour plus fluide) et overhead réseau (trop petit = beaucoup
+# d'allers-retours socket pour rien).
+UPLOAD_CHUNK_SIZE = 64 * 1024
 
-    url = "http://%s/edit" % ip
+
+def upload(ip, filename, filepath, progress_callback=None):
+    """
+    Envoie un fichier vers le Xteink X3 en le streamant par blocs
+    depuis le disque plutôt qu'en le chargeant entièrement en mémoire.
+
+    progress_callback, si fourni, est appelé après l'envoi de chaque
+    bloc avec (octets_envoyés, octets_total), ce qui permet d'afficher
+    une progression réelle côté interface plutôt qu'une barre
+    indéterminée.
+    """
 
     boundary = "----XteinkX3%s" % uuid.uuid4().hex
 
     basename = os.path.basename(filename)
 
-    with open(filepath, "rb") as f:
-        file_data = f.read()
+    file_size = os.path.getsize(filepath)
+
     print("Xteink X3: upload filename =", repr(basename))
-    print("Xteink X3: upload size =", len(file_data))
+    print("Xteink X3: upload size =", file_size)
+
     content_type = (
         mimetypes.guess_type(basename)[0]
         or "application/octet-stream"
     )
 
     header = (
-        "--%s\r\n"
-        'Content-Disposition: form-data; name="data"; filename="%s"\r\n'
-        "Content-Type: %s\r\n"
-        "\r\n"
-    ) % (
-        boundary,
-        basename,
-        content_type,
-    )
+        (
+            "--%s\r\n"
+            'Content-Disposition: form-data; name="data"; filename="%s"\r\n'
+            "Content-Type: %s\r\n"
+            "\r\n"
+        ) % (
+            boundary,
+            basename,
+            content_type,
+        )
+    ).encode("utf-8")
 
-    footer = "\r\n--%s--\r\n" % boundary
+    footer = (
+        "\r\n--%s--\r\n" % boundary
+    ).encode("utf-8")
 
-    body = (
-        header.encode("utf-8")
-        + file_data
-        + footer.encode("utf-8")
-    )
+    total_size = len(header) + file_size + len(footer)
 
-    request = urllib.request.Request(
-        url,
-        data=body,
-        method="POST",
-        headers={
-            "Content-Type":
-                "multipart/form-data; boundary=%s"
-                % boundary,
-
-            "Content-Length":
-                str(len(body)),
-        },
-    )
+    # Connexion HTTP brute (pas via http_opener/urllib) pour pouvoir
+    # envoyer le corps de la requête bloc par bloc et progresser.
+    # Comme http_opener(), ceci ne passe par aucun proxy système.
+    conn = http.client.HTTPConnection(ip, timeout=60)
 
     try:
 
-        with http_opener().open(
-            request,
-            timeout=60
-        ) as response:
+        conn.putrequest("POST", "/edit")
 
-            return response.read().decode(
-                "utf-8",
-                errors="replace"
-            )
+        conn.putheader(
+            "Content-Type",
+            "multipart/form-data; boundary=%s" % boundary,
+        )
+
+        conn.putheader(
+            "Content-Length",
+            str(total_size),
+        )
+
+        conn.endheaders()
+
+        sent = 0
+
+        conn.send(header)
+        sent += len(header)
+
+        if progress_callback:
+            progress_callback(sent, total_size)
+
+        with open(filepath, "rb") as f:
+
+            while True:
+
+                chunk = f.read(UPLOAD_CHUNK_SIZE)
+
+                if not chunk:
+                    break
+
+                conn.send(chunk)
+                sent += len(chunk)
+
+                if progress_callback:
+                    progress_callback(sent, total_size)
+
+        conn.send(footer)
+        sent += len(footer)
+
+        if progress_callback:
+            progress_callback(sent, total_size)
+
+        response = conn.getresponse()
+
+        return response.read().decode(
+            "utf-8",
+            errors="replace",
+        )
 
     except Exception as e:
 
@@ -365,6 +418,10 @@ def upload(ip, filename, filepath):
             "Erreur pendant l'envoi de %s\n\n%s"
             % (basename, e)
         )
+
+    finally:
+
+        conn.close()
 # ----------------------------------------------------------------------
 # Gestion des fichiers sur le Xteink
 # ----------------------------------------------------------------------
@@ -430,6 +487,94 @@ def list_files(ip, directory="/"):
             "(réponse non-JSON)\n\n%s"
             % (directory, e)
         )
+
+
+# ----------------------------------------------------------------------
+# Lecture brute d'un fichier (inspection / rétro-ingénierie)
+# ----------------------------------------------------------------------
+
+def download_file(ip, path):
+    """
+    Télécharge le contenu brut d'un fichier du Xteink X3.
+
+    Le firmware stock semble servir les fichiers de son système de
+    fichiers directement sur leur chemin (comme un petit serveur de
+    fichiers statiques), en plus de l'API /list, /edit, /Read_info.
+    Utilisé pour inspecter des fichiers internes (ex. les fichiers de
+    progression de lecture repérés dans XTCache/) sans que leur format
+    soit documenté au préalable.
+    """
+
+    if not path.startswith("/"):
+        path = "/" + path
+
+    quoted_path = urllib.parse.quote(
+        path,
+        safe="/",
+    )
+
+    url = "http://%s%s" % (
+        ip,
+        quoted_path,
+    )
+
+    print(
+        "Xteink X3: lecture du fichier :",
+        url,
+    )
+
+    try:
+
+        with http_opener().open(
+            url,
+            timeout=10,
+        ) as response:
+
+            return response.read()
+
+    except Exception as e:
+
+        raise XteinkError(
+            "Impossible de lire %s\n\n%s"
+            % (
+                path,
+                e,
+            )
+        )
+
+
+def find_duplicates(existing_files, filenames):
+    """
+    Compare une liste de fichiers déjà présents sur le X3 (telle que
+    retournée par list_files(), une liste de dicts avec "type"/"name")
+    à une liste de noms de fichiers qu'on s'apprête à envoyer.
+
+    Retourne le sous-ensemble de `filenames` qui existe déjà (comparaison
+    insensible à la casse), dans l'ordre d'origine.
+    """
+
+    existing_names = set()
+
+    if isinstance(existing_files, list):
+
+        for item in existing_files:
+
+            if not isinstance(item, dict):
+                continue
+
+            if item.get("type") != "file":
+                continue
+
+            name = item.get("name", "")
+
+            if name:
+                existing_names.add(name.lower())
+
+    return [
+        filename
+        for filename in filenames
+        if filename.lower() in existing_names
+    ]
 
 
 def delete_file(ip, path):
