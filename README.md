@@ -52,7 +52,7 @@ New in v1.1.0
 - "Explore Xteink X3 filesystem (debug)": browse and preview internal files
 - "Reading progress (X3)": displays reading progress per book (experimental — based on undocumented internal files)
 
-New n v1.3.0
+New n v1.2.0
 
 - Add support for multiple named Xteink X3 devices (save, rename,
   delete), with automatic migration from the old single-IP format
