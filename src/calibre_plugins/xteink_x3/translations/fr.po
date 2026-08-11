@@ -6,7 +6,7 @@ msgid ""
 msgstr ""
 "Project-Id-Version: Xteink X3 Calibre plugin\n"
 "Report-Msgid-Bugs-To: \n"
-"POT-Creation-Date: 2026-08-09 08:00+0000\n"
+"POT-Creation-Date: 2026-08-11 05:49+0000\n"
 "PO-Revision-Date: 2026-08-09 00:00+0000\n"
 "Last-Translator: ElendilDrac01\n"
 "Language-Team: French\n"
@@ -15,95 +15,215 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: action.py:181 action.py:187
+#: action.py:193 action.py:199
 msgid "unknown"
 msgstr "inconnu"
 
-#: action.py:425 action.py:837 action.py:878 action.py:932 action.py:957
-#: action.py:986 action.py:1019 action.py:1054 action.py:1158 action.py:1192
-#: action.py:1235 action.py:1246 action.py:1318 action.py:1374 action.py:1394
-#: action.py:1442 action.py:1497 action.py:1516 action.py:1562 action.py:1619
-#: action.py:1669 action.py:1722 action.py:1755 action.py:1790 action.py:1837
-#: action.py:1877 action.py:1890 action.py:1924 action.py:1972 action.py:1981
-#: action.py:2014 action.py:2057 action.py:2095 action.py:2198 action.py:2218
-#: action.py:2266 action.py:2283 action.py:2344 action.py:2362
+#: action.py:463 action.py:1404 action.py:1451 action.py:1496 action.py:1574
+#: action.py:1627 action.py:1670 action.py:1695 action.py:1732 action.py:1758
+#: action.py:1793 action.py:1828 action.py:1934 action.py:1970 action.py:2017
+#: action.py:2028 action.py:2071 action.py:2138 action.py:2174 action.py:2228
+#: action.py:2284 action.py:2304 action.py:2358 action.py:2417 action.py:2437
+#: action.py:2490 action.py:2547 action.py:2598 action.py:2652 action.py:2685
+#: action.py:2720 action.py:2767 action.py:2807 action.py:2820 action.py:2856
+#: action.py:2905 action.py:2918 action.py:2952 action.py:2985 action.py:3010
+#: action.py:3024 action.py:3057 action.py:3100 action.py:3138 action.py:3241
+#: action.py:3261 action.py:3309 action.py:3326 action.py:3400 action.py:3409
+#: action.py:3427
 msgid "X3 reader management"
 msgstr "Gestion du lecteur X3"
 
-#: action.py:436
+#: action.py:474
 msgid "Select the files or folders to delete:"
 msgstr "Sélectionnez les fichiers ou dossiers à supprimer :"
 
-#: action.py:477
+#: action.py:515
 msgid "Select all"
 msgstr "Tout sélectionner"
 
-#: action.py:481
+#: action.py:519
 msgid "Select none"
 msgstr "Tout désélectionner"
 
-#: action.py:485
+#: action.py:523 action.py:1349
 msgid "Delete"
 msgstr "Supprimer"
 
-#: action.py:489
+#: action.py:527
 msgid "Cancel"
 msgstr "Annuler"
 
-#: action.py:561
+#: action.py:599
 msgid "Xteink X3 system folder"
 msgstr "Dossier système du Xteink X3"
 
-#: action.py:574
+#: action.py:612
 #, python-format
 msgid "📄 %s  (%.1f MB)"
 msgstr "📄 %s  (%.1f Mo)"
 
-#: action.py:583
+#: action.py:621
 #, python-format
 msgid "📄 %s"
 msgstr "📄 %s"
 
-#: action.py:776
+#: action.py:848
 msgid "Xteink X3 filesystem (debug)"
 msgstr "Système de fichiers du Xteink X3 (debug)"
 
-#: action.py:785
+#: action.py:857
 msgid ""
 "Full recursive listing of the Xteink X3's storage. Mainly useful for "
 "troubleshooting or looking for undocumented files (e.g. a reading-progress "
 "file)."
-msgstr "Liste récursive complète du stockage du Xteink X3. Utile principalement pour le dépannage ou pour repérer des fichiers non documentés (par exemple un fichier de progression de lecture)."
+msgstr ""
+"Liste récursive complète du stockage du Xteink X3. Utile principalement pour "
+"le dépannage ou pour repérer des fichiers non documentés (par exemple un "
+"fichier de progression de lecture)."
 
-#: action.py:804
+#: action.py:878
 msgid "Copy to clipboard"
 msgstr "Copier dans le presse-papiers"
 
-#: action.py:812
+#: action.py:886 action.py:1303 action.py:1357
 msgid "Close"
 msgstr "Fermer"
 
-#: action.py:839
+#: action.py:907
+msgid "File path to preview (copy it from the tree above, after the \"→\"):"
+msgstr ""
+"Chemin du fichier à prévisualiser (copiez-le depuis l'arbre ci-dessus, après "
+"la « → ») :"
+
+#: action.py:924
+msgid "Preview"
+msgstr "Aperçu"
+
+#: action.py:940
+msgid "File content will appear here."
+msgstr "Le contenu du fichier apparaîtra ici."
+
+#: action.py:953
+msgid "Loading…"
+msgstr "Chargement…"
+
+#: action.py:994
+msgid ""
+"(binary content, showing first bytes as hex)\n"
+"\n"
+msgstr ""
+"(contenu binaire, premiers octets affichés en hexadécimal)\n"
+"\n"
+
+#: action.py:1004
+#, python-format
+msgid "Error: %s"
+msgstr "Erreur : %s"
+
+#: action.py:1189
+msgid "Reading progress (X3)"
+msgstr "Progression de lecture (X3)"
+
+#: action.py:1198
+msgid ""
+"Reading progress as tracked by the Xteink X3 itself, based on undocumented "
+"internal files — treat the exact percentages as approximate."
+msgstr ""
+"Progression telle que suivie par le Xteink X3 lui-même, basée sur des "
+"fichiers internes non documentés — considérez les pourcentages exacts comme "
+"approximatifs."
+
+#: action.py:1214 action.py:2198 action.py:2202
+msgid "Book"
+msgstr "Livre"
+
+#: action.py:1215
+msgid "Overall progress"
+msgstr "Progression globale"
+
+#: action.py:1216
+msgid "Current chapter"
+msgstr "Chapitre en cours"
+
+#: action.py:1217
+msgid "Chapter progress"
+msgstr "Progression du chapitre"
+
+#: action.py:1288
+msgid "Cumulative reading time:"
+msgstr "Temps de lecture cumulé :"
+
+#: action.py:1323
+msgid "Saved Xteink X3 devices"
+msgstr "Appareils Xteink X3 enregistrés"
+
+#: action.py:1341
+msgid "Rename"
+msgstr "Renommer"
+
+#: action.py:1405
+msgid "New name:"
+msgstr "Nouveau nom :"
+
+#: action.py:1431 action.py:2776 action.py:3207
+msgid "Confirmation"
+msgstr "Confirmation"
+
+#: action.py:1432
+#, python-format
+msgid "Delete \"%s\"?"
+msgstr "Supprimer « %s » ?"
+
+#: action.py:1453
 msgid "Manage books on the Xteink X3"
 msgstr "Gérer les livres sur le Xteink X3"
 
-#: action.py:883
+#: action.py:1501
 msgid "Send to Xteink X3"
 msgstr "Envoyer vers le Xteink X3"
 
-#: action.py:887
+#: action.py:1505
 msgid "Manage books on X3"
 msgstr "Gérer les livres sur le X3"
 
-#: action.py:891
+#: action.py:1509
 msgid "Empty Xteink X3…"
 msgstr "Vider le Xteink X3…"
 
-#: action.py:897
+#: action.py:1515
 msgid "Explore Xteink X3 filesystem (debug)…"
 msgstr "Explorer le système de fichiers du Xteink X3 (debug)…"
 
-#: action.py:934
+#: action.py:1519
+msgid "Reading progress (X3)…"
+msgstr "Progression de lecture (X3)…"
+
+#: action.py:1525
+msgid "Manage saved devices…"
+msgstr "Gérer les appareils enregistrés…"
+
+#: action.py:1575
+#, python-format
+msgid "Use \"%s\" (%s)?"
+msgstr "Utiliser « %s » (%s) ?"
+
+#: action.py:1607
+msgid "Scan the network..."
+msgstr "Scanner le réseau..."
+
+#: action.py:1608
+msgid "Enter IP manually..."
+msgstr "Saisir l'IP manuellement..."
+
+#: action.py:1609
+msgid "Manage saved devices..."
+msgstr "Gérer les appareils enregistrés..."
+
+#: action.py:1628
+msgid "Choose a Xteink X3:"
+msgstr "Choisissez un Xteink X3 :"
+
+#: action.py:1672
 #, python-format
 msgid ""
 "Saved Xteink address:\n"
@@ -118,7 +238,7 @@ msgstr ""
 "\n"
 "Voulez-vous utiliser cette adresse ?"
 
-#: action.py:959
+#: action.py:1697
 msgid ""
 "No Xteink X3 is saved.\n"
 "\n"
@@ -128,15 +248,19 @@ msgstr ""
 "\n"
 "Voulez-vous scanner le réseau ?"
 
-#: action.py:987
+#: action.py:1734
+msgid "Name this Xteink X3 (leave empty to skip saving it):"
+msgstr "Nommez ce Xteink X3 (laissez vide pour ne pas l'enregistrer) :"
+
+#: action.py:1759
 msgid "Xteink X3 IP address:"
 msgstr "Adresse IP du Xteink X3 :"
 
-#: action.py:1011
+#: action.py:1785
 msgid "Searching for Xteink X3 on the network..."
 msgstr "Recherche du Xteink X3 sur le réseau..."
 
-#: action.py:1056
+#: action.py:1830
 msgid ""
 "No Xteink X3 found.\n"
 "\n"
@@ -146,11 +270,11 @@ msgstr ""
 "\n"
 "Voulez-vous saisir une adresse IP manuellement ?"
 
-#: action.py:1100
+#: action.py:1874
 msgid "Xteink X3 found"
 msgstr "Xteink X3 trouvé"
 
-#: action.py:1102
+#: action.py:1876
 #, python-format
 msgid ""
 "Xteink X3 found:\n"
@@ -169,11 +293,11 @@ msgstr ""
 "\n"
 "Utiliser ce Xteink ?"
 
-#: action.py:1159
+#: action.py:1935
 msgid "Several Xteink devices found:"
 msgstr "Plusieurs appareils Xteink trouvés :"
 
-#: action.py:1193
+#: action.py:1971
 #, python-format
 msgid ""
 "Error while searching:\n"
@@ -184,11 +308,11 @@ msgstr ""
 "\n"
 "%s"
 
-#: action.py:1236
+#: action.py:2018
 msgid "No book selected."
 msgstr "Aucun livre sélectionné."
 
-#: action.py:1248 action.py:1724 action.py:1892 action.py:1983
+#: action.py:2030 action.py:2654 action.py:2822 action.py:2920 action.py:3026
 msgid ""
 "Please put the Xteink X3 into\n"
 "\"PC Transfer\" mode.\n"
@@ -200,11 +324,30 @@ msgstr ""
 "\n"
 "Une fois le mode activé, cliquez sur OK."
 
-#: action.py:1288 action.py:1292
-msgid "Book"
-msgstr "Livre"
+#: action.py:2063
+msgid "Listing folders on the Xteink X3..."
+msgstr "Liste des dossiers sur le Xteink X3..."
 
-#: action.py:1319
+#: action.py:2132
+msgid "(Root — no folder)"
+msgstr "(Racine — pas de dossier)"
+
+#: action.py:2139
+msgid "Send to which folder on the Xteink X3?"
+msgstr "Envoyer vers quel dossier du Xteink X3 ?"
+
+#: action.py:2175
+#, python-format
+msgid ""
+"Error while listing folders:\n"
+"\n"
+"%s"
+msgstr ""
+"Erreur pendant la liste des dossiers :\n"
+"\n"
+"%s"
+
+#: action.py:2229
 #, python-format
 msgid ""
 "Unable to retrieve the EPUB file.\n"
@@ -215,11 +358,11 @@ msgstr ""
 "\n"
 "%s"
 
-#: action.py:1375
+#: action.py:2285
 msgid "The selected book has no EPUB format."
 msgstr "Le livre sélectionné n'a pas de format EPUB."
 
-#: action.py:1396
+#: action.py:2306
 #, python-format
 msgid ""
 "Unable to retrieve the %s file.\n"
@@ -230,12 +373,12 @@ msgstr ""
 "\n"
 "%s"
 
-#: action.py:1434
+#: action.py:2350
 #, python-format
 msgid "Converting %d book(s) to EPUB..."
 msgstr "Conversion de %d livre(s) en EPUB..."
 
-#: action.py:1498
+#: action.py:2418
 #, python-format
 msgid ""
 "Error while converting books:\n"
@@ -246,11 +389,11 @@ msgstr ""
 "\n"
 "%s"
 
-#: action.py:1508
+#: action.py:2429
 msgid "Checking for existing files on the Xteink X3..."
 msgstr "Vérification des fichiers déjà présents sur le Xteink X3..."
 
-#: action.py:1567
+#: action.py:2495
 #, python-format
 msgid ""
 "%d book(s) already exist on the Xteink X3 with the same file name:\n"
@@ -265,44 +408,40 @@ msgstr ""
 "\n"
 "Que voulez-vous faire ?"
 
-#: action.py:1576
+#: action.py:2504
 msgid "Overwrite"
 msgstr "Écraser"
 
-#: action.py:1581
+#: action.py:2509
 msgid "Skip duplicates"
 msgstr "Ignorer les doublons"
 
-#: action.py:1621
+#: action.py:2549
 msgid "All selected books already exist on the Xteink X3."
 msgstr "Tous les livres sélectionnés existent déjà sur le Xteink X3."
 
-#: action.py:1661
+#: action.py:2590
 msgid "Sending books to Xteink X3... 0%"
 msgstr "Envoi des livres vers le Xteink X3... 0 %"
 
-#: action.py:1707
+#: action.py:2637
 #, python-format
 msgid "Sending books to Xteink X3... %d%%"
 msgstr "Envoi des livres vers le Xteink X3... %d %%"
 
-#: action.py:1747 action.py:2006
+#: action.py:2677 action.py:3049
 msgid "Reading books stored on the Xteink X3..."
 msgstr "Lecture des livres stockés sur le Xteink X3..."
 
-#: action.py:1791 action.py:2058
+#: action.py:2721 action.py:3101
 msgid "Unexpected response from the Xteink X3."
 msgstr "Réponse inattendue du Xteink X3."
 
-#: action.py:1838
+#: action.py:2768
 msgid "The Xteink X3 is already empty."
 msgstr "Le Xteink X3 est déjà vide."
 
-#: action.py:1846 action.py:2164
-msgid "Confirmation"
-msgstr "Confirmation"
-
-#: action.py:1848
+#: action.py:2778
 #, python-format
 msgid ""
 "This will PERMANENTLY delete all %d item(s) from the Xteink X3:\n"
@@ -310,9 +449,8 @@ msgid ""
 msgstr ""
 "Ceci va supprimer DÉFINITIVEMENT les %d élément(s) suivants du Xteink X3 :\n"
 "\n"
-""
 
-#: action.py:1853
+#: action.py:2783
 msgid ""
 "\n"
 "\n"
@@ -322,7 +460,7 @@ msgstr ""
 "\n"
 "Cette action est irréversible. Continuer ?"
 
-#: action.py:1878 action.py:2199
+#: action.py:2808 action.py:3242
 #, python-format
 msgid ""
 "Error while reading files:\n"
@@ -333,15 +471,15 @@ msgstr ""
 "\n"
 "%s"
 
-#: action.py:1916
+#: action.py:2848
 msgid "Exploring the Xteink X3 filesystem..."
 msgstr "Exploration du système de fichiers du Xteink X3..."
 
-#: action.py:1955
+#: action.py:2887
 msgid "(empty)"
 msgstr "(vide)"
 
-#: action.py:1973
+#: action.py:2906
 #, python-format
 msgid ""
 "Error while exploring the filesystem:\n"
@@ -352,20 +490,43 @@ msgstr ""
 "\n"
 "%s"
 
-#: action.py:2096
+#: action.py:2944
+msgid "Reading progress data from the Xteink X3..."
+msgstr "Lecture des données de progression depuis le Xteink X3..."
+
+#: action.py:2987
+msgid "No reading progress data found on the Xteink X3."
+msgstr "Aucune donnée de progression de lecture trouvée sur le Xteink X3."
+
+#: action.py:3012
+#, python-format
+msgid ""
+"Error while reading progress data:\n"
+"\n"
+"%s\n"
+"\n"
+"If this is a timeout, the Xteink X3 may have exited \"PC Transfer\" mode "
+"since the last operation — check the device's screen and try again."
+msgstr ""
+"%s\n"
+"\n"
+"S'il s'agit d'un timeout, le Xteink X3 est peut-être sorti du mode « "
+"Transfert PC » depuis la dernière opération — vérifiez l'écran de l'appareil "
+"et réessayez."
+
+#: action.py:3139
 msgid "No files or folders found on the Xteink X3."
 msgstr "Aucun fichier ou dossier trouvé sur le Xteink X3."
 
-#: action.py:2166
+#: action.py:3209
 msgid ""
 "Do you want to delete the following items?\n"
 "\n"
 msgstr ""
 "Voulez-vous supprimer les éléments suivants ?\n"
 "\n"
-""
 
-#: action.py:2170
+#: action.py:3213
 msgid ""
 "\n"
 "\n"
@@ -375,21 +536,21 @@ msgstr ""
 "\n"
 "Pour les dossiers, tout leur contenu sera également supprimé."
 
-#: action.py:2210
+#: action.py:3253
 msgid "Deleting items from the Xteink X3..."
 msgstr "Suppression des éléments sur le Xteink X3..."
 
-#: action.py:2255
+#: action.py:3298
 #, python-format
 msgid "%d item deleted from the Xteink X3."
 msgstr "%d élément supprimé du Xteink X3."
 
-#: action.py:2261
+#: action.py:3304
 #, python-format
 msgid "%d items deleted from the Xteink X3."
 msgstr "%d éléments supprimés du Xteink X3."
 
-#: action.py:2284
+#: action.py:3327
 #, python-format
 msgid ""
 "Error while deleting:\n"
@@ -400,7 +561,7 @@ msgstr ""
 "\n"
 "%s"
 
-#: action.py:2315
+#: action.py:3359
 #, python-format
 msgid ""
 "Sending completed.\n"
@@ -419,7 +580,7 @@ msgstr ""
 "\n"
 "%d livre envoyé."
 
-#: action.py:2330
+#: action.py:3374
 #, python-format
 msgid ""
 "Sending completed.\n"
@@ -438,7 +599,22 @@ msgstr ""
 "\n"
 "%d livres envoyés."
 
-#: action.py:2363
+#: action.py:3389
+#, python-format
+msgid ""
+"WARNING: the Xteink X3 accepted the request but the following %d file(s) "
+"could not be confirmed on the device afterwards — they were likely NOT "
+"actually saved:\n"
+"\n"
+"%s"
+msgstr ""
+"ATTENTION : le Xteink X3 a accepté la requête mais les %d fichier(s) "
+"suivants n'ont pas pu être confirmés sur l'appareil ensuite — ils n'ont "
+"probablement PAS été réellement enregistrés :\n"
+"\n"
+"%s"
+
+#: action.py:3428
 #, python-format
 msgid ""
 "Error while sending:\n"
@@ -448,3 +624,19 @@ msgstr ""
 "Erreur pendant l'envoi :\n"
 "\n"
 "%s"
+
+#~ msgid "Create new folder..."
+#~ msgstr "Créer un nouveau dossier..."
+
+#~ msgid "New folder name (e.g. \"Author\" or \"Author/Series\"):"
+#~ msgstr "Nom du nouveau dossier (ex. « Auteur » ou « Auteur/Série ») :"
+
+#, python-format
+#~ msgid ""
+#~ "Error while reading progress data:\n"
+#~ "\n"
+#~ "%s"
+#~ msgstr ""
+#~ "Erreur pendant la lecture des données de progression :\n"
+#~ "\n"
+#~ "%s"

@@ -27,37 +27,164 @@ class XteinkError(Exception):
 
 
 # ----------------------------------------------------------------------
-# Configuration IP mémorisée
+# Configuration (IP mémorisée + liste d'appareils nommés)
 # ----------------------------------------------------------------------
 
-def load_saved_ip():
-    try:
-        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-            data = json.load(f)
+def _load_config():
+    """
+    Charge le fichier de configuration JSON du plugin dans son
+    intégralité, ou {} si absent/invalide.
+    """
 
-        ip = data.get("ip")
-        if ip:
-            return ip.strip()
+    try:
+
+        with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+
+            return json.load(f)
 
     except Exception:
-        pass
+
+        return {}
+
+
+def _save_config(data):
+    """
+    Écrit le fichier de configuration JSON du plugin. Toujours appelé
+    avec le contenu complet (voir _load_config) pour ne jamais perdre
+    une clé existante au passage.
+    """
+
+    try:
+
+        os.makedirs(CONFIG_DIR, exist_ok=True)
+
+        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
+
+            json.dump(
+                data,
+                f,
+                indent=2,
+                ensure_ascii=False,
+            )
+
+    except Exception as e:
+
+        print(
+            "Xteink X3: impossible de sauvegarder la configuration :",
+            e,
+        )
+
+
+def load_saved_ip():
+
+    ip = _load_config().get("ip")
+
+    if ip:
+        return ip.strip()
 
     return None
 
 
 def save_ip(ip):
-    try:
-        os.makedirs(CONFIG_DIR, exist_ok=True)
 
-        with open(CONFIG_FILE, "w", encoding="utf-8") as f:
-            json.dump(
-                {"ip": ip},
-                f,
-                indent=2,
-            )
+    # IMPORTANT : on part de la config existante et on la met à jour,
+    # plutôt que d'écraser tout le fichier — sans ça, chaque appel à
+    # save_ip() effacerait la liste d'appareils nommés (voir
+    # load_devices/save_device ci-dessous).
+    data = _load_config()
 
-    except Exception as e:
-        print("Xteink X3: impossible de sauvegarder l'IP :", e)
+    data["ip"] = ip
+
+    _save_config(data)
+
+
+def load_devices():
+    """
+    Retourne la liste des appareils Xteink enregistrés, sous la forme
+    [{"name": ..., "ip": ...}, ...].
+
+    Si aucune liste nommée n'existe encore mais qu'une IP unique (ancien
+    format à IP unique, avant l'ajout de cette fonctionnalité) est
+    mémorisée, elle est présentée comme un unique appareil sans nom
+    personnalisé plutôt que perdue.
+    """
+
+    data = _load_config()
+
+    devices = data.get("devices")
+
+    if isinstance(devices, list):
+
+        return [
+            d for d in devices
+            if isinstance(d, dict) and d.get("name") and d.get("ip")
+        ]
+
+    old_ip = data.get("ip")
+
+    if old_ip:
+
+        old_ip = old_ip.strip()
+
+        return [
+            {
+                "name": old_ip,
+                "ip": old_ip,
+            }
+        ]
+
+    return []
+
+
+def save_device(name, ip):
+    """
+    Ajoute ou met à jour (par nom) un appareil dans la liste mémorisée.
+    """
+
+    data = _load_config()
+
+    devices = data.get("devices")
+
+    if not isinstance(devices, list):
+        devices = []
+
+    name = name.strip()
+    ip = ip.strip()
+
+    devices = [
+        d for d in devices
+        if isinstance(d, dict) and d.get("name") != name
+    ]
+
+    devices.append(
+        {
+            "name": name,
+            "ip": ip,
+        }
+    )
+
+    data["devices"] = devices
+
+    _save_config(data)
+
+
+def delete_device(name):
+
+    data = _load_config()
+
+    devices = data.get("devices")
+
+    if not isinstance(devices, list):
+        return
+
+    devices = [
+        d for d in devices
+        if isinstance(d, dict) and d.get("name") != name
+    ]
+
+    data["devices"] = devices
+
+    _save_config(data)
 
 
 # ----------------------------------------------------------------------
@@ -311,7 +438,7 @@ def scan_network():
 UPLOAD_CHUNK_SIZE = 64 * 1024
 
 
-def upload(ip, filename, filepath, progress_callback=None):
+def upload(ip, filename, filepath, progress_callback=None, target_folder=None):
     """
     Envoie un fichier vers le Xteink X3 en le streamant par blocs
     depuis le disque plutôt qu'en le chargeant entièrement en mémoire.
@@ -320,15 +447,33 @@ def upload(ip, filename, filepath, progress_callback=None):
     bloc avec (octets_envoyés, octets_total), ce qui permet d'afficher
     une progression réelle côté interface plutôt qu'une barre
     indéterminée.
+
+    target_folder, si fourni, est préfixé au nom de fichier envoyé au
+    firmware (ex. "Auteur/Serie/livre.epub" plutôt que "livre.epub").
+    EXPÉRIMENTAL : on suppose que le firmware gère les chemins imbriqués
+    dans ce champ (comportement habituel des firmwares ESP32 de type
+    "éditeur SPIFFS/LittleFS", dont l'API /list, /edit ressemble
+    beaucoup), mais ce n'est pas documenté ni confirmé pour ce modèle
+    précis. À tester avec prudence.
     """
 
     boundary = "----XteinkX3%s" % uuid.uuid4().hex
 
     basename = os.path.basename(filename)
 
+    if target_folder:
+
+        remote_name = (
+            target_folder.strip("/") + "/" + basename
+        )
+
+    else:
+
+        remote_name = basename
+
     file_size = os.path.getsize(filepath)
 
-    print("Xteink X3: upload filename =", repr(basename))
+    print("Xteink X3: upload filename =", repr(remote_name))
     print("Xteink X3: upload size =", file_size)
 
     content_type = (
@@ -344,7 +489,7 @@ def upload(ip, filename, filepath, progress_callback=None):
             "\r\n"
         ) % (
             boundary,
-            basename,
+            remote_name,
             content_type,
         )
     ).encode("utf-8")
@@ -450,7 +595,7 @@ def list_files(ip, directory="/"):
 
         with http_opener().open(
             url,
-            timeout=10
+            timeout=20
         ) as response:
 
             data = response.read().decode(
@@ -541,6 +686,49 @@ def download_file(ip, path):
                 e,
             )
         )
+
+
+def verify_file_exists(ip, directory, basename):
+    """
+    Confirme qu'un fichier existe réellement sur le Xteink X3, en
+    relistant le dossier concerné après un envoi.
+
+    Nécessaire car le firmware peut répondre "OK" en HTTP à /edit sans
+    avoir réellement écrit le fichier (observé en pratique : un envoi
+    vers un dossier inexistant a été confirmé par le firmware comme
+    réussi côté requête, alors que ni le dossier ni le fichier
+    n'avaient été créés). On ne peut donc pas se fier à la seule
+    réponse HTTP de upload() pour confirmer un envoi.
+    """
+
+    try:
+
+        entries = list_files(
+            ip,
+            directory or "/",
+        )
+
+    except Exception:
+
+        # Impossible de vérifier : on ne peut pas confirmer la
+        # réussite, mais on ne peut pas non plus affirmer un échec.
+        return None
+
+    if not isinstance(entries, list):
+        return None
+
+    for item in entries:
+
+        if not isinstance(item, dict):
+            continue
+
+        if item.get("type") != "file":
+            continue
+
+        if item.get("name") == basename:
+            return True
+
+    return False
 
 
 def find_duplicates(existing_files, filenames):

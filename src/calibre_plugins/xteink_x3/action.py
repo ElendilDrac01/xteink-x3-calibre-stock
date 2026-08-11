@@ -47,6 +47,7 @@ from qt.core import (
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
+    QListWidget,
 )
 
 from .network import (
@@ -55,9 +56,13 @@ from .network import (
     scan_network,
     load_saved_ip,
     save_ip,
+    load_devices,
+    save_device,
+    delete_device,
     list_files,
     delete_file,
     download_file,
+    verify_file_exists,
     clean_info_field,
     find_duplicates,
     XteinkError,
@@ -163,18 +168,20 @@ class ConversionWorker(QThread):
 
 class UploadWorker(QThread):
 
-    finished = pyqtSignal(int, str, str, str)
+    finished = pyqtSignal(int, str, str, str, list)
     failed = pyqtSignal(str)
     progress_updated = pyqtSignal(int)
 
-    def __init__(self, ip, books, parent=None):
+    def __init__(self, ip, books, target_folder=None, parent=None):
         super().__init__(parent)
         self.ip = ip
         self.books = books
+        self.target_folder = target_folder
 
     def run(self):
 
         sent_books = 0
+        unverified_books = []
 
         try:
 
@@ -219,16 +226,42 @@ class UploadWorker(QThread):
                     filename,
                     epub,
                     progress_callback=on_progress,
+                    target_folder=self.target_folder,
                 )
 
+                # Le firmware peut répondre "OK" en HTTP sans avoir
+                # réellement écrit le fichier (observé en pratique avec
+                # un dossier cible inexistant) : on ne déclare un envoi
+                # réussi qu'après l'avoir confirmé par une relecture du
+                # dossier concerné.
+                basename = os.path.basename(filename)
+
+                verified = verify_file_exists(
+                    self.ip,
+                    self.target_folder,
+                    basename,
+                )
+
+                if verified is False:
+
+                    unverified_books.append(filename)
+
+                else:
+
+                    # True (confirmé) ou None (impossible à vérifier,
+                    # ex. connexion perdue juste après l'envoi) : dans
+                    # le doute on ne le compte pas comme un échec avéré,
+                    # seul un "False" explicite (fichier absent) l'est.
+                    sent_books += 1
+
                 cumulative_sent += book_size
-                sent_books += 1
 
             self.finished.emit(
                 sent_books,
                 self.ip,
                 version,
                 device_id,
+                unverified_books,
             )
 
         except Exception as e:
@@ -1277,6 +1310,139 @@ class ReadingProgressDialog(QDialog):
         layout.addWidget(close_button)
 
 
+# ======================================================================
+# APPAREILS NOMMÉS
+# ======================================================================
+
+class DeviceManagerDialog(QDialog):
+
+    def __init__(self, parent):
+        super().__init__(parent)
+
+        self.setWindowTitle(
+            _("Saved Xteink X3 devices"),
+        )
+
+        self.resize(420, 320)
+
+        self.devices = []
+
+        layout = QVBoxLayout(self)
+
+        self.list_widget = QListWidget()
+
+        layout.addWidget(self.list_widget)
+
+        self.refresh()
+
+        button_layout = QHBoxLayout()
+
+        rename_button = QPushButton(
+            _("Rename"),
+        )
+
+        rename_button.clicked.connect(
+            self.rename_selected,
+        )
+
+        delete_button = QPushButton(
+            _("Delete"),
+        )
+
+        delete_button.clicked.connect(
+            self.delete_selected,
+        )
+
+        close_button = QPushButton(
+            _("Close"),
+        )
+
+        close_button.clicked.connect(
+            self.accept,
+        )
+
+        button_layout.addWidget(rename_button)
+        button_layout.addWidget(delete_button)
+        button_layout.addStretch()
+        button_layout.addWidget(close_button)
+
+        layout.addLayout(button_layout)
+
+    def refresh(self):
+
+        self.list_widget.clear()
+
+        self.devices = load_devices()
+
+        for device in self.devices:
+
+            self.list_widget.addItem(
+                "%s  —  %s" % (
+                    device["name"],
+                    device["ip"],
+                )
+            )
+
+    def selected_device(self):
+
+        row = self.list_widget.currentRow()
+
+        if row < 0 or row >= len(self.devices):
+            return None
+
+        return self.devices[row]
+
+    def rename_selected(self):
+
+        device = self.selected_device()
+
+        if not device:
+            return
+
+        new_name, ok = QInputDialog.getText(
+            self,
+            _("X3 reader management"),
+            _("New name:"),
+            text=device["name"],
+        )
+
+        if not ok or not new_name.strip():
+            return
+
+        new_name = new_name.strip()
+
+        if new_name == device["name"]:
+            return
+
+        delete_device(device["name"])
+        save_device(new_name, device["ip"])
+
+        self.refresh()
+
+    def delete_selected(self):
+
+        device = self.selected_device()
+
+        if not device:
+            return
+
+        answer = QMessageBox.question(
+            self,
+            _("Confirmation"),
+            _('Delete "%s"?') % device["name"],
+            QMessageBox.Yes
+            | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if answer != QMessageBox.Yes:
+            return
+
+        delete_device(device["name"])
+
+        self.refresh()
+
+
 class XteinkX3Action(InterfaceAction):
 
     name = "Xteink X3"
@@ -1309,6 +1475,7 @@ class XteinkX3Action(InterfaceAction):
         self.conversion_worker = None
         self.explore_worker = None
         self.reading_progress_worker = None
+        self.folder_list_worker = None
         self.delete_worker = None
         self.progress = None
 
@@ -1316,6 +1483,7 @@ class XteinkX3Action(InterfaceAction):
         self.pending_operation = None
         self.pending_upload_ip = None
         self.pending_upload_books = None
+        self.pending_upload_target_folder = None
         self.pending_ready_books = None
         self.pending_temp_files = []
         self.pending_explore_ip = None
@@ -1351,6 +1519,12 @@ class XteinkX3Action(InterfaceAction):
             _("Reading progress (X3)…"),
         )
 
+        menu.addSeparator()
+
+        devices_action = menu.addAction(
+            _("Manage saved devices…"),
+        )
+
         send_action.triggered.connect(
             self.send_to_x3,
         )
@@ -1367,6 +1541,10 @@ class XteinkX3Action(InterfaceAction):
             self.explore_x3,
         )
 
+        devices_action.triggered.connect(
+            self.manage_devices,
+        )
+
         progress_action.triggered.connect(
             self.reading_progress_x3,
         )
@@ -1380,6 +1558,108 @@ class XteinkX3Action(InterfaceAction):
     def choose_xteink(self, operation):
 
         self.pending_operation = operation
+
+        devices = load_devices()
+
+        if not devices:
+
+            return self.choose_xteink_legacy(operation)
+
+        if len(devices) == 1:
+
+            device = devices[0]
+
+            answer = QMessageBox.question(
+                self.gui,
+                _("X3 reader management"),
+                _('Use "%s" (%s)?') % (
+                    device["name"],
+                    device["ip"],
+                ),
+                QMessageBox.Yes
+                | QMessageBox.No
+                | QMessageBox.Cancel,
+                QMessageBox.Yes,
+            )
+
+            if answer == QMessageBox.Yes:
+                return device["ip"]
+
+            if answer == QMessageBox.Cancel:
+
+                self.pending_operation = None
+
+                return None
+
+            # No : proposer un autre choix (scan, IP manuelle, gestion)
+            return self.choose_xteink_other(
+                operation,
+                devices,
+            )
+
+        return self.choose_xteink_other(
+            operation,
+            devices,
+        )
+
+    def choose_xteink_other(self, operation, devices):
+
+        scan_label = _("Scan the network...")
+        manual_label = _("Enter IP manually...")
+        manage_label = _("Manage saved devices...")
+
+        labels = [
+            "%s  —  %s" % (
+                device["name"],
+                device["ip"],
+            )
+            for device in devices
+        ]
+
+        labels += [
+            scan_label,
+            manual_label,
+            manage_label,
+        ]
+
+        selected, ok = QInputDialog.getItem(
+            self.gui,
+            _("X3 reader management"),
+            _("Choose a Xteink X3:"),
+            labels,
+            0,
+            False,
+        )
+
+        if not ok:
+
+            self.pending_operation = None
+
+            return None
+
+        if selected == scan_label:
+
+            self.start_scan()
+
+            return None
+
+        if selected == manual_label:
+
+            return self.ask_manual_ip(operation)
+
+        if selected == manage_label:
+
+            self.pending_operation = None
+
+            self.manage_devices()
+
+            return None
+
+        index = labels.index(selected)
+
+        return devices[index]["ip"]
+
+    def choose_xteink_legacy(self, operation):
 
         saved_ip = load_saved_ip()
 
@@ -1437,6 +1717,40 @@ class XteinkX3Action(InterfaceAction):
 
         return None
 
+    def maybe_save_new_device(self, ip):
+
+        # On ne propose de nommer l'appareil que s'il n'est pas déjà
+        # connu sous un nom existant — pas la peine de redemander à
+        # chaque connexion à un appareil déjà mémorisé.
+        devices = load_devices()
+
+        if any(device["ip"] == ip for device in devices):
+            return
+
+        name, ok = QInputDialog.getText(
+            self.gui,
+            _("X3 reader management"),
+            _(
+                "Name this Xteink X3 (leave empty to skip saving it):"
+            ),
+            text=ip,
+        )
+
+        if ok and name.strip():
+
+            save_device(
+                name.strip(),
+                ip,
+            )
+
+    def manage_devices(self):
+
+        dialog = DeviceManagerDialog(
+            self.gui,
+        )
+
+        dialog.exec()
+
     def ask_manual_ip(self, operation):
 
         ip, ok = QInputDialog.getText(
@@ -1454,6 +1768,8 @@ class XteinkX3Action(InterfaceAction):
         ip = ip.strip()
 
         save_ip(ip)
+
+        self.maybe_save_new_device(ip)
 
         self.pending_operation = operation
 
@@ -1576,6 +1892,8 @@ class XteinkX3Action(InterfaceAction):
 
                 save_ip(ip)
 
+                self.maybe_save_new_device(ip)
+
                 self.operation_with_ip(ip)
 
             else:
@@ -1631,6 +1949,8 @@ class XteinkX3Action(InterfaceAction):
         ip = results[index][0]
 
         save_ip(ip)
+
+        self.maybe_save_new_device(ip)
 
         self.operation_with_ip(ip)
 
@@ -1729,6 +2049,134 @@ class XteinkX3Action(InterfaceAction):
             self.start_upload(ip)
 
     def start_upload(self, ip):
+
+        ids = self.pending_ids
+
+        if not ids:
+            return
+
+        self.qaction.setEnabled(False)
+
+        self.pending_upload_ip = ip
+
+        self.progress = QProgressDialog(
+            _("Listing folders on the Xteink X3..."),
+            None,
+            0,
+            0,
+            self.gui,
+        )
+
+        self.progress.setWindowTitle(
+            _("X3 reader management"),
+        )
+
+        self.progress.setMinimumDuration(0)
+        self.progress.setCancelButton(None)
+
+        self.progress.show()
+
+        self.folder_list_worker = ListFilesWorker(
+            ip,
+            "/",
+            self.gui,
+        )
+
+        self.folder_list_worker.finished.connect(
+            self.folder_choice_finished,
+        )
+
+        self.folder_list_worker.failed.connect(
+            self.folder_choice_failed,
+        )
+
+        self.folder_list_worker.start()
+
+    def folder_choice_finished(self, files):
+
+        self.folder_list_worker = None
+
+        self.close_progress()
+
+        ip = self.pending_upload_ip
+
+        folders = []
+
+        if isinstance(files, list):
+
+            for item in files:
+
+                if not isinstance(item, dict):
+                    continue
+
+                if item.get("type") != "dir":
+                    continue
+
+                name = item.get(
+                    "name",
+                    "",
+                )
+
+                if not name:
+                    continue
+
+                if name in PROTECTED_SYSTEM_FOLDERS:
+                    continue
+
+                folders.append(name)
+
+        folders.sort(
+            key=str.lower,
+        )
+
+        root_label = _("(Root — no folder)")
+
+        labels = [root_label] + folders
+
+        selected, ok = QInputDialog.getItem(
+            self.gui,
+            _("X3 reader management"),
+            _("Send to which folder on the Xteink X3?"),
+            labels,
+            0,
+            False,
+        )
+
+        if not ok:
+
+            self.qaction.setEnabled(True)
+
+            return
+
+        if selected == root_label:
+
+            target_folder = None
+
+        else:
+
+            target_folder = selected
+
+        self.continue_upload_with_folder(
+            ip,
+            target_folder,
+        )
+
+    def folder_choice_failed(self, message):
+
+        self.folder_list_worker = None
+
+        self.close_progress()
+
+        self.qaction.setEnabled(True)
+
+        error_dialog(
+            self.gui,
+            _("X3 reader management"),
+            _("Error while listing folders:\n\n%s") % message,
+            show=True,
+        )
+
+    def continue_upload_with_folder(self, ip, target_folder):
 
         ids = self.pending_ids
 
@@ -1874,15 +2322,20 @@ class XteinkX3Action(InterfaceAction):
             )
 
         if not ready_books and not to_convert:
+
+            self.qaction.setEnabled(True)
+
             return
 
         save_ip(ip)
 
-        self.qaction.setEnabled(False)
-
         if not to_convert:
 
-            self.start_duplicate_check(ip, ready_books)
+            self.start_duplicate_check(
+                ip,
+                ready_books,
+                target_folder,
+            )
 
             return
 
@@ -1891,6 +2344,7 @@ class XteinkX3Action(InterfaceAction):
         # vérification des doublons puis l'envoi.
         self.pending_upload_ip = ip
         self.pending_ready_books = ready_books
+        self.pending_upload_target_folder = target_folder
 
         self.progress = QProgressDialog(
             _("Converting %d book(s) to EPUB...") % len(to_convert),
@@ -1944,7 +2398,11 @@ class XteinkX3Action(InterfaceAction):
         if not books:
             return
 
-        self.start_duplicate_check(ip, books)
+        self.start_duplicate_check(
+            ip,
+            books,
+            self.pending_upload_target_folder,
+        )
 
     def conversion_failed(self, message):
 
@@ -1961,10 +2419,11 @@ class XteinkX3Action(InterfaceAction):
             show=True,
         )
 
-    def start_duplicate_check(self, ip, books):
+    def start_duplicate_check(self, ip, books, target_folder=None):
 
         self.pending_upload_ip = ip
         self.pending_upload_books = books
+        self.pending_upload_target_folder = target_folder
 
         self.progress = QProgressDialog(
             _("Checking for existing files on the Xteink X3..."),
@@ -1983,9 +2442,15 @@ class XteinkX3Action(InterfaceAction):
 
         self.progress.show()
 
+        list_path = (
+            "/" + target_folder.strip("/")
+            if target_folder
+            else "/"
+        )
+
         self.dup_check_worker = ListFilesWorker(
             ip,
-            "/",
+            list_path,
             self.gui,
         )
 
@@ -2007,6 +2472,7 @@ class XteinkX3Action(InterfaceAction):
 
         ip = self.pending_upload_ip
         books = self.pending_upload_books
+        target_folder = self.pending_upload_target_folder
 
         filenames = [filename for filename, _epub in books]
 
@@ -2014,7 +2480,7 @@ class XteinkX3Action(InterfaceAction):
 
         if not duplicates:
 
-            self.begin_upload(ip, books)
+            self.begin_upload(ip, books, target_folder)
 
             return
 
@@ -2056,7 +2522,7 @@ class XteinkX3Action(InterfaceAction):
 
         if clicked == overwrite_button:
 
-            self.begin_upload(ip, books)
+            self.begin_upload(ip, books, target_folder)
 
         elif clicked == skip_button:
 
@@ -2088,7 +2554,7 @@ class XteinkX3Action(InterfaceAction):
 
                 return
 
-            self.begin_upload(ip, filtered_books)
+            self.begin_upload(ip, filtered_books, target_folder)
 
         else:
 
@@ -2115,9 +2581,10 @@ class XteinkX3Action(InterfaceAction):
         self.begin_upload(
             self.pending_upload_ip,
             self.pending_upload_books,
+            self.pending_upload_target_folder,
         )
 
-    def begin_upload(self, ip, books):
+    def begin_upload(self, ip, books, target_folder=None):
 
         self.progress = QProgressDialog(
             _("Sending books to Xteink X3... 0%"),
@@ -2142,6 +2609,7 @@ class XteinkX3Action(InterfaceAction):
         self.worker = UploadWorker(
             ip,
             books,
+            target_folder,
             self.gui,
         )
 
@@ -2540,7 +3008,12 @@ class XteinkX3Action(InterfaceAction):
         error_dialog(
             self.gui,
             _("X3 reader management"),
-            _("Error while reading progress data:\n\n%s") % message,
+            _(
+                "Error while reading progress data:\n\n%s\n\n"
+                "If this is a timeout, the Xteink X3 may have exited "
+                "\"PC Transfer\" mode since the last operation — check "
+                "the device's screen and try again."
+            ) % message,
             show=True,
         )
 
@@ -2873,6 +3346,7 @@ class XteinkX3Action(InterfaceAction):
         ip,
         version,
         device_id,
+        unverified_books,
     ):
 
         self.close_progress()
@@ -2909,12 +3383,33 @@ class XteinkX3Action(InterfaceAction):
                 sent,
             )
 
-        info_dialog(
-            self.gui,
-            _("X3 reader management"),
-            message,
-            show=True,
-        )
+        if unverified_books:
+
+            message += "\n\n" + _(
+                "WARNING: the Xteink X3 accepted the request but the "
+                "following %d file(s) could not be confirmed on the "
+                "device afterwards — they were likely NOT actually "
+                "saved:\n\n%s"
+            ) % (
+                len(unverified_books),
+                "\n".join(unverified_books),
+            )
+
+            error_dialog(
+                self.gui,
+                _("X3 reader management"),
+                message,
+                show=True,
+            )
+
+        else:
+
+            info_dialog(
+                self.gui,
+                _("X3 reader management"),
+                message,
+                show=True,
+            )
 
         self.worker = None
         self.pending_ids = None
