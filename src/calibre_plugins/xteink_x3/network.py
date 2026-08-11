@@ -688,6 +688,53 @@ def download_file(ip, path):
         )
 
 
+def verify_path_deleted(ip, directory, name):
+    """
+    Confirme qu'un chemin (fichier OU dossier) a bien disparu d'un
+    répertoire du Xteink X3, en le relistant après une suppression.
+
+    Même logique de précaution que verify_file_exists() côté envoi :
+    rien ne garantit que le firmware ne réponde pas "OK" à une requête
+    DELETE sans avoir réellement supprimé quoi que ce soit.
+
+    Retourne True si la suppression est confirmée (absent de la
+    liste), False si l'élément est toujours présent, ou None si la
+    vérification elle-même a échoué (dans ce cas, on ne peut ni
+    confirmer ni infirmer).
+    """
+
+    try:
+
+        entries = list_files(
+            ip,
+            directory or "/",
+        )
+
+    except NotADirectoryError:
+
+        # Le dossier parent lui-même n'est plus un dossier valide
+        # (curieux, mais pas notre problème ici) : on ne peut pas
+        # confirmer via cette méthode.
+        return None
+
+    except Exception:
+
+        return None
+
+    if not isinstance(entries, list):
+        return None
+
+    for item in entries:
+
+        if not isinstance(item, dict):
+            continue
+
+        if item.get("name") == name:
+            return False
+
+    return True
+
+
 def verify_file_exists(ip, directory, basename):
     """
     Confirme qu'un fichier existe réellement sur le Xteink X3, en

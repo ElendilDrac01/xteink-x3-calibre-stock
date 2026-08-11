@@ -52,6 +52,7 @@ from qt.core import (
 
 from .network import (
     get_info,
+    initialize_xteink,
     upload,
     scan_network,
     load_saved_ip,
@@ -63,6 +64,7 @@ from .network import (
     delete_file,
     download_file,
     verify_file_exists,
+    verify_path_deleted,
     clean_info_field,
     find_duplicates,
     XteinkError,
@@ -310,6 +312,10 @@ class ListFilesWorker(QThread):
 
         try:
 
+            # Le firmware Xteink doit être initialisé avant le premier
+            # appel à /list.
+            initialize_xteink()
+
             files = list_files(
                 self.ip,
                 self.directory,
@@ -328,7 +334,7 @@ class ListFilesWorker(QThread):
 
 class DeleteWorker(QThread):
 
-    finished = pyqtSignal(int)
+    finished = pyqtSignal(int, list)
     failed = pyqtSignal(str)
 
     def __init__(self, ip, paths, parent=None):
@@ -340,18 +346,57 @@ class DeleteWorker(QThread):
     def run(self):
 
         deleted = 0
+        unverified_paths = []
 
         try:
+
+            # Le firmware Xteink doit être initialisé avant toute
+            # opération réseau.
+            initialize_xteink()
 
             for path in self.paths:
 
                 deleted += self.delete_tree(path)
 
-            self.finished.emit(deleted)
+                # Vérification au niveau de chaque élément explicitement
+                # sélectionné par l'utilisateur (pas chaque fichier
+                # imbriqué en dessous, pour éviter une explosion
+                # d'appels réseau sur un gros dossier) : le firmware
+                # peut répondre "OK" à une suppression sans l'avoir
+                # réellement effectuée (voir verify_file_exists() côté
+                # envoi pour un exemple concret de ce comportement).
+                parent_dir, name = self.split_path(path)
+
+                verified = verify_path_deleted(
+                    self.ip,
+                    parent_dir,
+                    name,
+                )
+
+                if verified is False:
+
+                    unverified_paths.append(path)
+
+            self.finished.emit(
+                deleted,
+                unverified_paths,
+            )
 
         except Exception as e:
 
             self.failed.emit(str(e))
+
+    @staticmethod
+    def split_path(path):
+
+        path = path.rstrip("/")
+
+        if "/" not in path:
+            return "/", path
+
+        parent, name = path.rsplit("/", 1)
+
+        return parent or "/", name
 
     def delete_tree(self, path):
 
@@ -681,6 +726,132 @@ class XteinkFilesDialog(QDialog):
 # EXPLORATION (DEBUG / RÉTRO-INGÉNIERIE)
 # ======================================================================
 
+# ======================================================================
+# NETTOYAGE DES DOSSIERS ORPHELINS (XTCache)
+# ======================================================================
+
+# Sous-dossiers de XTCache où le firmware crée un dossier par livre
+# (nommé exactement comme le fichier EPUB, sans l'extension) — voir
+# l'exploration manuelle qui a servi à identifier ce format.
+XTCACHE_PER_BOOK_DIRS = (
+    "/XTCache/epub",
+    "/XTCache/readTime/epub",
+    "/XTCache/bookmark/epub",
+)
+
+
+class OrphanScanWorker(QThread):
+    """
+    Compare les livres EPUB actuellement à la racine du Xteink X3 aux
+    dossiers par-livre créés par le firmware dans XTCache/ (cache de
+    lecture, temps de lecture, marque-pages). Tout dossier qui ne
+    correspond plus à un EPUB présent est considéré orphelin — reste
+    probablement d'un livre supprimé ou jamais nettoyé par le firmware
+    lui-même.
+    """
+
+    finished = pyqtSignal(list)
+    failed = pyqtSignal(str)
+
+    def __init__(self, ip, parent=None):
+        super().__init__(parent)
+        self.ip = ip
+
+    def run(self):
+
+        try:
+
+            # Le firmware Xteink doit être initialisé avant le premier
+            # appel à /list.
+            initialize_xteink()
+
+            try:
+
+                root_entries = list_files(
+                    self.ip,
+                    "/",
+                )
+
+            except Exception as e:
+
+                self.failed.emit(str(e))
+
+                return
+
+            if not isinstance(root_entries, list):
+                root_entries = []
+
+            current_titles = set()
+
+            for item in root_entries:
+
+                if not isinstance(item, dict):
+                    continue
+
+                if item.get("type") != "file":
+                    continue
+
+                name = item.get(
+                    "name",
+                    "",
+                )
+
+                if name.lower().endswith(".epub"):
+
+                    current_titles.add(
+                        name[:-len(".epub")]
+                    )
+
+            orphans = []
+
+            for xtcache_dir in XTCACHE_PER_BOOK_DIRS:
+
+                try:
+
+                    entries = list_files(
+                        self.ip,
+                        xtcache_dir,
+                    )
+
+                except Exception:
+
+                    # Ce sous-dossier n'existe pas (ou n'est pas
+                    # accessible) : rien à nettoyer ici, ce n'est pas
+                    # une erreur en soi.
+                    continue
+
+                if not isinstance(entries, list):
+                    continue
+
+                for item in entries:
+
+                    if not isinstance(item, dict):
+                        continue
+
+                    if item.get("type") != "dir":
+                        continue
+
+                    name = item.get(
+                        "name",
+                        "",
+                    )
+
+                    if not name:
+                        continue
+
+                    if name not in current_titles:
+
+                        orphans.append(
+                            xtcache_dir + "/" + name
+                        )
+
+            self.finished.emit(orphans)
+
+        except Exception as e:
+
+            self.failed.emit(str(e))
+
+
 class ExploreWorker(QThread):
     """
     Parcourt récursivement l'arborescence du Xteink X3 et construit un
@@ -706,6 +877,10 @@ class ExploreWorker(QThread):
         lines = []
 
         try:
+
+            # Une seule initialisation avant le parcours récursif :
+            # walk() effectue ensuite plusieurs appels à /list.
+            initialize_xteink()
 
             self.walk(
                 "/",
@@ -823,6 +998,10 @@ class DownloadFileWorker(QThread):
     def run(self):
 
         try:
+
+            # Le téléchargement peut être lancé directement depuis
+            # l'outil d'exploration : initialiser le X3 auparavant.
+            initialize_xteink()
 
             content = download_file(
                 self.ip,
@@ -1041,6 +1220,10 @@ class ReadingProgressWorker(QThread):
 
         try:
 
+            # La progression peut être la toute première opération
+            # réseau après le lancement de Calibre.
+            initialize_xteink()
+
             try:
 
                 entries = list_files(
@@ -1180,6 +1363,60 @@ def format_percent(value):
     return "%.1f %%" % value
 
 
+def compute_reading_stats(results):
+    """
+    Calcule un résumé agrégé à partir des résultats individuels de
+    ReadingProgressWorker : temps total, livre le plus lu, livre le
+    plus avancé, nombre de livres essentiellement terminés.
+    """
+
+    tracked_time = [
+        entry for entry in results
+        if entry["read_time_seconds"] is not None
+    ]
+
+    tracked_progress = [
+        entry for entry in results
+        if entry["book_percent"] is not None
+    ]
+
+    most_read = (
+        max(
+            tracked_time,
+            key=lambda entry: entry["read_time_seconds"],
+        )
+        if tracked_time
+        else None
+    )
+
+    most_advanced = (
+        max(
+            tracked_progress,
+            key=lambda entry: entry["book_percent"],
+        )
+        if tracked_progress
+        else None
+    )
+
+    finished_count = sum(
+        1
+        for entry in tracked_progress
+        if entry["book_percent"] >= 99.0
+    )
+
+    return {
+        "book_count": len(results),
+        "total_seconds": (
+            sum(entry["read_time_seconds"] for entry in tracked_time)
+            if tracked_time
+            else None
+        ),
+        "most_read": most_read,
+        "most_advanced": most_advanced,
+        "finished_count": finished_count,
+    }
+
+
 class ReadingProgressDialog(QDialog):
 
     def __init__(self, parent, results):
@@ -1189,7 +1426,7 @@ class ReadingProgressDialog(QDialog):
             _("Reading progress (X3)"),
         )
 
-        self.resize(750, 400)
+        self.resize(780, 480)
 
         layout = QVBoxLayout(self)
 
@@ -1205,9 +1442,71 @@ class ReadingProgressDialog(QDialog):
 
         layout.addWidget(info_label)
 
+        # ----------------------------------------------------------
+        # Tableau de bord : résumé agrégé, avant le détail par livre.
+        # ----------------------------------------------------------
+
+        stats = compute_reading_stats(results)
+
+        dashboard_lines = []
+
+        dashboard_lines.append(
+            _("%d book(s) tracked on this device") % stats["book_count"]
+        )
+
+        dashboard_lines.append(
+            _("Total reading time: %s")
+            % format_read_time(stats["total_seconds"])
+        )
+
+        if stats["most_read"]:
+
+            dashboard_lines.append(
+                _("Most read: %s (%s)")
+                % (
+                    stats["most_read"]["title"],
+                    format_read_time(
+                        stats["most_read"]["read_time_seconds"]
+                    ),
+                )
+            )
+
+        if stats["most_advanced"]:
+
+            dashboard_lines.append(
+                _("Furthest along: %s (%s)")
+                % (
+                    stats["most_advanced"]["title"],
+                    format_percent(
+                        stats["most_advanced"]["book_percent"]
+                    ),
+                )
+            )
+
+        dashboard_lines.append(
+            _("Essentially finished (≥99%%): %d book(s)")
+            % stats["finished_count"]
+        )
+
+        dashboard_label = QLabel(
+            "\n".join(dashboard_lines)
+        )
+
+        dashboard_label.setWordWrap(True)
+
+        dashboard_label.setStyleSheet(
+            "QLabel { padding: 8px; }"
+        )
+
+        layout.addWidget(dashboard_label)
+
+        # ----------------------------------------------------------
+        # Détail par livre.
+        # ----------------------------------------------------------
+
         table = QTableWidget()
 
-        table.setColumnCount(4)
+        table.setColumnCount(5)
 
         table.setHorizontalHeaderLabels(
             [
@@ -1215,6 +1514,7 @@ class ReadingProgressDialog(QDialog):
                 _("Overall progress"),
                 _("Current chapter"),
                 _("Chapter progress"),
+                _("Reading time"),
             ]
         )
 
@@ -1258,6 +1558,14 @@ class ReadingProgressDialog(QDialog):
                 ),
             )
 
+            table.setItem(
+                row,
+                4,
+                QTableWidgetItem(
+                    format_read_time(entry["read_time_seconds"])
+                ),
+            )
+
         table.horizontalHeader().setSectionResizeMode(
             0,
             QHeaderView.ResizeMode.Stretch,
@@ -1269,35 +1577,6 @@ class ReadingProgressDialog(QDialog):
         )
 
         layout.addWidget(table)
-
-        # Temps de lecture cumulé en bonus, sous forme de résumé texte
-        # (pas de colonne dédiée pour ne pas surcharger le tableau).
-        time_lines = [
-            "%s — %s"
-            % (
-                entry["title"],
-                format_read_time(entry["read_time_seconds"]),
-            )
-            for entry in results
-            if entry["read_time_seconds"] is not None
-        ]
-
-        if time_lines:
-
-            time_label = QLabel(
-                _("Cumulative reading time:")
-            )
-
-            layout.addWidget(time_label)
-
-            time_text = QPlainTextEdit(
-                "\n".join(time_lines)
-            )
-
-            time_text.setReadOnly(True)
-            time_text.setMaximumHeight(100)
-
-            layout.addWidget(time_text)
 
         close_button = QPushButton(
             _("Close"),
@@ -1476,6 +1755,7 @@ class XteinkX3Action(InterfaceAction):
         self.explore_worker = None
         self.reading_progress_worker = None
         self.folder_list_worker = None
+        self.orphan_scan_worker = None
         self.delete_worker = None
         self.progress = None
 
@@ -1525,12 +1805,20 @@ class XteinkX3Action(InterfaceAction):
             _("Manage saved devices…"),
         )
 
+        cleanup_action = menu.addAction(
+            _("Clean up orphaned cache folders…"),
+        )
+
         send_action.triggered.connect(
             self.send_to_x3,
         )
 
         manage_action.triggered.connect(
             self.manage_x3,
+        )
+
+        cleanup_action.triggered.connect(
+            self.cleanup_x3,
         )
 
         empty_action.triggered.connect(
@@ -2001,6 +2289,10 @@ class XteinkX3Action(InterfaceAction):
         elif operation == "progress":
 
             self.reading_progress_start_with_ip(ip)
+
+        elif operation == "cleanup":
+
+            self.cleanup_start_with_ip(ip)
 
     # ==================================================================
     # ENVOI
@@ -2810,6 +3102,127 @@ class XteinkX3Action(InterfaceAction):
         )
 
     # ==================================================================
+    # NETTOYAGE DES DOSSIERS ORPHELINS
+    # ==================================================================
+
+    def cleanup_x3(self):
+
+        answer = QMessageBox.information(
+            self.gui,
+            _("X3 reader management"),
+            _(
+                "Please put the Xteink X3 into\n"
+                '"PC Transfer" mode.\n\n'
+                "Once the mode is active, click OK."
+            ),
+            QMessageBox.Ok
+            | QMessageBox.Cancel,
+            QMessageBox.Ok,
+        )
+
+        if answer != QMessageBox.Ok:
+            return
+
+        ip = self.choose_xteink("cleanup")
+
+        if ip:
+
+            self.cleanup_start_with_ip(ip)
+
+    def cleanup_start_with_ip(self, ip):
+
+        save_ip(ip)
+
+        self.progress = QProgressDialog(
+            _("Scanning for orphaned cache folders..."),
+            None,
+            0,
+            0,
+            self.gui,
+        )
+
+        self.progress.setWindowTitle(
+            _("X3 reader management"),
+        )
+
+        self.progress.setMinimumDuration(0)
+        self.progress.setCancelButton(None)
+
+        self.progress.show()
+
+        self.orphan_scan_worker = OrphanScanWorker(
+            ip,
+            self.gui,
+        )
+
+        self.orphan_scan_worker.finished.connect(
+            lambda orphans, x=ip:
+            self.orphan_scan_finished(x, orphans)
+        )
+
+        self.orphan_scan_worker.failed.connect(
+            self.orphan_scan_failed,
+        )
+
+        self.orphan_scan_worker.start()
+
+    def orphan_scan_finished(self, ip, orphans):
+
+        self.orphan_scan_worker = None
+
+        self.close_progress()
+
+        if not orphans:
+
+            info_dialog(
+                self.gui,
+                _("X3 reader management"),
+                _("No orphaned cache folders found."),
+                show=True,
+            )
+
+            return
+
+        answer = QMessageBox.question(
+            self.gui,
+            _("Confirmation"),
+            _(
+                "%d orphaned cache folder(s) found (no matching "
+                "book at the root anymore):\n\n%s\n\n"
+                "Delete them?"
+            ) % (
+                len(orphans),
+                "\n".join(orphans),
+            ),
+            QMessageBox.Yes
+            | QMessageBox.No,
+            QMessageBox.No,
+        )
+
+        if answer != QMessageBox.Yes:
+            return
+
+        self.start_delete(
+            ip,
+            orphans,
+        )
+
+    def orphan_scan_failed(self, message):
+
+        self.orphan_scan_worker = None
+
+        self.close_progress()
+
+        error_dialog(
+            self.gui,
+            _("X3 reader management"),
+            _(
+                "Error while scanning for orphaned folders:\n\n%s"
+            ) % message,
+            show=True,
+        )
+
+    # ==================================================================
     # EXPLORATION (DEBUG)
     # ==================================================================
 
@@ -3282,7 +3695,7 @@ class XteinkX3Action(InterfaceAction):
 
         self.delete_worker.start()
 
-    def delete_finished(self, deleted):
+    def delete_finished(self, deleted, unverified_paths):
 
         if self.progress:
 
@@ -3304,12 +3717,33 @@ class XteinkX3Action(InterfaceAction):
                 "%d items deleted from the Xteink X3."
             ) % deleted
 
-        info_dialog(
-            self.gui,
-            _("X3 reader management"),
-            message,
-            show=True,
-        )
+        if unverified_paths:
+
+            message += "\n\n" + _(
+                "WARNING: the Xteink X3 accepted the deletion request "
+                "but the following %d item(s) could still be found on "
+                "the device afterwards — they were likely NOT actually "
+                "deleted:\n\n%s"
+            ) % (
+                len(unverified_paths),
+                "\n".join(unverified_paths),
+            )
+
+            error_dialog(
+                self.gui,
+                _("X3 reader management"),
+                message,
+                show=True,
+            )
+
+        else:
+
+            info_dialog(
+                self.gui,
+                _("X3 reader management"),
+                message,
+                show=True,
+            )
 
     def delete_failed(self, message):
 
