@@ -43,14 +43,10 @@ welcome.
 - French translation included (`fr.mo`); UI strings are in English by
   default via `gettext`.
 
-New in v1.1.0
+New in v1.3.0
 
-- "Empty Xteink X3" button: clears the device in one click (protects the XTCache system folder)
-- Automatic conversion to EPUB for books lacking this format (MOBI, AZW3, PDF, etc.)
-- Real progress bar during transfer + duplicate detection before transfer
-- Calibre toolbar icon
-- "Explore Xteink X3 filesystem (debug)": browse and preview internal files
-- "Reading progress (X3)": displays reading progress per book (experimental — based on undocumented internal files)
+- Added reading information to the "Reading Progress" dashboard.
+- Fixed a bug in the first operation that caused a timeout.
 
 New in v1.2.0
 
@@ -69,10 +65,14 @@ New in v1.2.0
 - Warn explicitly in the UI when a "successful" upload can't be
   verified on the device, instead of silently reporting success
 
-New in v1.3.0
+New in v1.1.0
 
-- Added reading information to the "Reading Progress" dashboard.
-- Fixed a bug in the first operation that caused a timeout.
+- "Empty Xteink X3" button: clears the device in one click (protects the XTCache system folder)
+- Automatic conversion to EPUB for books lacking this format (MOBI, AZW3, PDF, etc.)
+- Real progress bar during transfer + duplicate detection before transfer
+- Calibre toolbar icon
+- "Explore Xteink X3 filesystem (debug)": browse and preview internal files
+- "Reading progress (X3)": displays reading progress per book (experimental — based on undocumented internal files)
 
 ## About the `bofi.xteink.com` request
 
