@@ -52,6 +52,23 @@ New in v1.1.0
 - "Explore Xteink X3 filesystem (debug)": browse and preview internal files
 - "Reading progress (X3)": displays reading progress per book (experimental — based on undocumented internal files)
 
+New n v1.3.0
+
+- Add support for multiple named Xteink X3 devices (save, rename,
+  delete), with automatic migration from the old single-IP format
+- Fix save_ip() silently overwriting the entire config file on every
+  call, which would have wiped the named devices list
+- Add optional target folder selection when sending books (existing
+  folders only — folder creation via /edit was tested and confirmed
+  broken on this firmware, option removed)
+- Add post-upload verification: the firmware can return HTTP 200 on
+  /edit without actually writing the file (observed with a
+  non-existent target folder), so uploads are now confirmed by
+  relisting the target directory rather than trusting the HTTP
+  response alone
+- Warn explicitly in the UI when a "successful" upload can't be
+  verified on the device, instead of silently reporting success
+
 ## About the `bofi.xteink.com` request
 
 Before the plugin can talk to the reader over the LAN, the stock Xteink
