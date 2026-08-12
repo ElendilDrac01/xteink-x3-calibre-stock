@@ -52,7 +52,6 @@ from qt.core import (
 
 from .network import (
     get_info,
-    initialize_xteink,
     upload,
     scan_network,
     load_saved_ip,
@@ -312,10 +311,6 @@ class ListFilesWorker(QThread):
 
         try:
 
-            # Le firmware Xteink doit être initialisé avant le premier
-            # appel à /list.
-            initialize_xteink()
-
             files = list_files(
                 self.ip,
                 self.directory,
@@ -350,13 +345,12 @@ class DeleteWorker(QThread):
 
         try:
 
-            # Le firmware Xteink doit être initialisé avant toute
-            # opération réseau.
-            initialize_xteink()
+            for index, path in enumerate(self.paths):
 
-            for path in self.paths:
-
-                deleted += self.delete_tree(path)
+                deleted += self.delete_tree(
+                    path,
+                    initialize=(index == 0),
+                )
 
                 # Vérification au niveau de chaque élément explicitement
                 # sélectionné par l'utilisateur (pas chaque fichier
@@ -398,7 +392,7 @@ class DeleteWorker(QThread):
 
         return parent or "/", name
 
-    def delete_tree(self, path):
+    def delete_tree(self, path, initialize=False):
 
         """
         Delete a file or directory recursively.
@@ -412,6 +406,7 @@ class DeleteWorker(QThread):
             items = list_files(
                 self.ip,
                 path,
+                initialize=initialize,
             )
 
         except NotADirectoryError:
@@ -627,22 +622,19 @@ class XteinkFilesDialog(QDialog):
             if not name:
                 continue
 
+            # Les dossiers système (ex. XTCache) ne sont pas de vrais
+            # livres ou fichiers de bibliothèque : on ne les affiche
+            # plus du tout ici plutôt que de les montrer verrouillés,
+            # pour ne pas encombrer la liste avec quelque chose que
+            # l'utilisateur ne peut de toute façon pas supprimer.
+            if item_type == "dir" and name in PROTECTED_SYSTEM_FOLDERS:
+                continue
+
             if item_type == "dir":
 
                 text = "📁 %s" % name
 
                 checkbox = QCheckBox(text)
-
-                # Protect the Xteink system cache.
-                if name in PROTECTED_SYSTEM_FOLDERS:
-
-                    checkbox.setChecked(False)
-
-                    checkbox.setEnabled(False)
-
-                    checkbox.setToolTip(
-                        _("Xteink X3 system folder"),
-                    )
 
             else:
 
@@ -761,10 +753,6 @@ class OrphanScanWorker(QThread):
 
         try:
 
-            # Le firmware Xteink doit être initialisé avant le premier
-            # appel à /list.
-            initialize_xteink()
-
             try:
 
                 root_entries = list_files(
@@ -788,19 +776,75 @@ class OrphanScanWorker(QThread):
                 if not isinstance(item, dict):
                     continue
 
-                if item.get("type") != "file":
-                    continue
-
                 name = item.get(
                     "name",
                     "",
                 )
 
-                if name.lower().endswith(".epub"):
+                if not name:
+                    continue
 
-                    current_titles.add(
-                        name[:-len(".epub")]
-                    )
+                item_type = item.get(
+                    "type",
+                    "",
+                )
+
+                if item_type == "file":
+
+                    if name.lower().endswith(".epub"):
+
+                        current_titles.add(
+                            name[:-len(".epub")]
+                        )
+
+                elif item_type == "dir":
+
+                    if name in PROTECTED_SYSTEM_FOLDERS:
+                        continue
+
+                    # Un livre peut aussi être rangé dans un dossier
+                    # "bundle" à la racine (ex. "Titre (24)/Titre -
+                    # Auteur.epub" avec cover.jpg et metadata.opf à
+                    # côté), pas seulement en EPUB à plat. Se limiter
+                    # aux fichiers à plat a précédemment fait passer
+                    # à tort des livres actifs pour des orphelins et
+                    # supprimé leur progression de lecture — on
+                    # regarde donc aussi dans chaque sous-dossier
+                    # racine (un seul niveau, pas de récursion plus
+                    # profonde nécessaire d'après ce qu'on a observé).
+                    try:
+
+                        sub_entries = list_files(
+                            self.ip,
+                            "/" + name,
+                            initialize=False,
+                        )
+
+                    except Exception:
+
+                        continue
+
+                    if not isinstance(sub_entries, list):
+                        continue
+
+                    for sub_item in sub_entries:
+
+                        if not isinstance(sub_item, dict):
+                            continue
+
+                        if sub_item.get("type") != "file":
+                            continue
+
+                        sub_name = sub_item.get(
+                            "name",
+                            "",
+                        )
+
+                        if sub_name.lower().endswith(".epub"):
+
+                            current_titles.add(
+                                sub_name[:-len(".epub")]
+                            )
 
             orphans = []
 
@@ -811,6 +855,7 @@ class OrphanScanWorker(QThread):
                     entries = list_files(
                         self.ip,
                         xtcache_dir,
+                        initialize=False,
                     )
 
                 except Exception:
@@ -878,10 +923,6 @@ class ExploreWorker(QThread):
 
         try:
 
-            # Une seule initialisation avant le parcours récursif :
-            # walk() effectue ensuite plusieurs appels à /list.
-            initialize_xteink()
-
             self.walk(
                 "/",
                 0,
@@ -911,6 +952,7 @@ class ExploreWorker(QThread):
             items = list_files(
                 self.ip,
                 path,
+                initialize=(depth == 0),
             )
 
         except NotADirectoryError:
@@ -998,10 +1040,6 @@ class DownloadFileWorker(QThread):
     def run(self):
 
         try:
-
-            # Le téléchargement peut être lancé directement depuis
-            # l'outil d'exploration : initialiser le X3 auparavant.
-            initialize_xteink()
 
             content = download_file(
                 self.ip,
@@ -1219,10 +1257,6 @@ class ReadingProgressWorker(QThread):
     def run(self):
 
         try:
-
-            # La progression peut être la toute première opération
-            # réseau après le lancement de Calibre.
-            initialize_xteink()
 
             try:
 
@@ -3188,7 +3222,10 @@ class XteinkX3Action(InterfaceAction):
             _("Confirmation"),
             _(
                 "%d orphaned cache folder(s) found (no matching "
-                "book at the root anymore):\n\n%s\n\n"
+                "book at the root anymore, including inside "
+                "bundle-style subfolders):\n\n%s\n\n"
+                "Please double-check these titles are genuinely "
+                "gone from your library before confirming.\n\n"
                 "Delete them?"
             ) % (
                 len(orphans),

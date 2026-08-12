@@ -43,6 +43,42 @@ welcome.
 - French translation included (`fr.mo`); UI strings are in English by
   default via `gettext`.
 
+New in v1.4.0
+
+Add delete verification, orphan cleanup, reading dashboard; fix critical bugs
+
+- Add post-delete verification, symmetric to the existing post-upload
+  check: the firmware can report success on /edit DELETE without
+  actually deleting anything, so deletions are now confirmed by
+  relisting the parent directory
+- Add "Clean up orphaned cache folders" tool, comparing XTCache/
+  per-book folders against books currently on the device
+- Add a reading habits dashboard (total time, most-read book, most
+  advanced book, books essentially finished) on top of the existing
+  per-book progress table
+
+Bug fixes:
+- CRITICAL: fix orphan detection false-positiving on books stored in
+  bundle-style folders (e.g. "Title (24)/Title - Author.epub") rather
+  than flat at the root — this caused two actively-read books' reading
+  progress to be wiped as "orphaned" during testing. Detection now
+  also scans one level into root subfolders.
+- Fix list_files() never unlocking the firmware's local HTTP API,
+  causing a timeout on the very first network call of a session for
+  several features (folder browsing before send, explore, cleanup,
+  reading progress)
+- Fix deleting a saved device not clearing the legacy "last used IP"
+  fallback, causing deleted devices to reappear on the next connection
+- Increase timeouts (get_info, download_file, delete_file) for
+  resilience on slow-responding Wi-Fi
+- Stop showing the XTCache system folder in the file manager dialog
+  entirely, instead of showing it locked
+
+⚠️ As always: heavily AI-assisted, hand-reviewed, tested where
+possible. The orphan cleanup bug above is a good reminder to
+double-check its output before confirming deletion, even after this
+fix — see the in-app warning.
+
 New in v1.3.0
 
 - Added reading information to the "Reading Progress" dashboard.

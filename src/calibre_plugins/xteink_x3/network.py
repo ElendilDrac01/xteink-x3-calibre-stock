@@ -175,7 +175,30 @@ def delete_device(name):
     devices = data.get("devices")
 
     if not isinstance(devices, list):
-        return
+        devices = []
+
+    deleted_ip = None
+
+    for d in devices:
+
+        if isinstance(d, dict) and d.get("name") == name:
+
+            deleted_ip = d.get("ip")
+
+            break
+
+    # Cas particulier : aucune liste "devices" n'a encore jamais été
+    # créée explicitement, et l'entrée à supprimer correspond en fait
+    # à l'ancienne IP unique migrée automatiquement pour l'affichage
+    # par load_devices() (qui la présente comme un appareil nommé
+    # d'après sa propre IP). Il faut reconnaître ce cas aussi.
+    if deleted_ip is None:
+
+        old_ip = data.get("ip")
+
+        if old_ip and old_ip.strip() == name.strip():
+
+            deleted_ip = old_ip.strip()
 
     devices = [
         d for d in devices
@@ -183,6 +206,21 @@ def delete_device(name):
     ]
 
     data["devices"] = devices
+
+    # Si l'appareil supprimé correspond à l'ancienne IP "dernière
+    # utilisée" (héritée du format à IP unique, avant les appareils
+    # nommés), on la nettoie aussi. Sans ça, dès que la liste nommée
+    # redevient vide, choose_xteink_legacy() la retrouve et propose
+    # de nouveau l'appareil qu'on vient pourtant de supprimer.
+    current_ip = data.get("ip")
+
+    if (
+        deleted_ip
+        and current_ip
+        and current_ip.strip() == deleted_ip.strip()
+    ):
+
+        data.pop("ip", None)
 
     _save_config(data)
 
@@ -258,7 +296,7 @@ def clean_info_field(info, key, default="?"):
     return value.replace("<br>", "").strip()
 
 
-def get_info(ip, initialize=True):
+def get_info(ip, initialize=True, timeout=8):
 
     if initialize:
         initialize_xteink()
@@ -268,7 +306,7 @@ def get_info(ip, initialize=True):
     print("Xteink X3: connexion directe à", url)
 
     try:
-        with http_opener().open(url, timeout=3) as response:
+        with http_opener().open(url, timeout=timeout) as response:
             data = response.read().decode(
                 "utf-8",
                 errors="replace"
@@ -571,10 +609,20 @@ def upload(ip, filename, filepath, progress_callback=None, target_folder=None):
 # Gestion des fichiers sur le Xteink
 # ----------------------------------------------------------------------
 
-def list_files(ip, directory="/"):
+def list_files(ip, directory="/", initialize=True):
     """
     Retourne la liste des fichiers présents dans un dossier du Xteink X3.
+
+    initialize=True (par défaut) débloque d'abord l'API HTTP locale du
+    firmware via initialize_xteink() — nécessaire au premier appel
+    réseau d'un flux, sans quoi /list ne répond pas et la requête
+    expire (timed out). Passer initialize=False pour des appels
+    récursifs/répétés dans un même flux déjà débloqué, afin d'éviter
+    un aller-retour réseau superflu à chaque appel imbriqué.
     """
+
+    if initialize:
+        initialize_xteink()
 
     url = "http://%s/list?dir=%s" % (
         ip,
@@ -672,7 +720,7 @@ def download_file(ip, path):
 
         with http_opener().open(
             url,
-            timeout=10,
+            timeout=20,
         ) as response:
 
             return response.read()
@@ -842,7 +890,7 @@ def delete_file(ip, path):
 
         with http_opener().open(
             request,
-            timeout=10
+            timeout=20
         ) as response:
 
             result = response.read().decode(
