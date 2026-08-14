@@ -43,6 +43,32 @@ welcome.
 - French translation included (`fr.mo`); UI strings are in English by
   default via `gettext`.
 
+New in v1.5.0
+
+Add working folder creation, folder navigation in file manager; remove broken debug tool
+
+- Add real, working folder creation: PUT /edit with a multipart "path"
+  field (trailing slash, no file content) reliably creates a
+  directory on the Xteink X3 — confirmed by direct experimentation
+  after the earlier attempt (nested filename via POST /edit) turned
+  out not to work at all
+- "Create new folder..." is back in the send-to-X3 folder picker,
+  creating nested paths (e.g. "Author/Series") one level at a time,
+  verifying each level actually exists before proceeding — nothing is
+  uploaded into a folder that wasn't confirmed
+- Add folder navigation to the "Manage books on X3" dialog: an Open
+  button on each folder and an Up button to browse into and back out
+  of subfolders, instead of only being able to select/delete
+  top-level entries
+- Remove the "Test folder creation (debug)" tool added last release —
+  now redundant since folder creation actually works, and it still
+  used the old broken method
+
+⚠️ As always: heavily AI-assisted, hand-reviewed, tested where
+possible without full Calibre access. Folder creation is now backed
+by real evidence rather than assumption, but still test with a
+throwaway folder and book first.
+
 New in v1.4.0
 
 Add delete verification, orphan cleanup, reading dashboard; fix critical bugs
@@ -73,11 +99,6 @@ Bug fixes:
   resilience on slow-responding Wi-Fi
 - Stop showing the XTCache system folder in the file manager dialog
   entirely, instead of showing it locked
-
-⚠️ As always: heavily AI-assisted, hand-reviewed, tested where
-possible. The orphan cleanup bug above is a good reminder to
-double-check its output before confirming deletion, even after this
-fix — see the in-app warning.
 
 New in v1.3.0
 

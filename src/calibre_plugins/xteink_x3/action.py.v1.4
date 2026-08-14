@@ -63,9 +63,7 @@ from .network import (
     delete_file,
     download_file,
     verify_file_exists,
-    verify_folder_exists,
     verify_path_deleted,
-    create_folder,
     clean_info_field,
     find_duplicates,
     XteinkError,
@@ -494,19 +492,11 @@ PROTECTED_SYSTEM_FOLDERS = {
 
 class XteinkFilesDialog(QDialog):
 
-    # Code de résultat personnalisé pour QDialog.done(), distinct de
-    # QDialog.Accepted (1) et QDialog.Rejected (0) : signale à
-    # l'appelant "l'utilisateur veut naviguer", pas "supprimer" ni
-    # "annuler".
-    NAVIGATE = 2
-
-    def __init__(self, parent, files, current_path="/"):
+    def __init__(self, parent, files):
 
         super().__init__(parent)
 
         self.files = files
-        self.current_path = current_path
-        self.navigate_target = None
         self.checkboxes = []
 
         self.setWindowTitle(
@@ -520,43 +510,8 @@ class XteinkFilesDialog(QDialog):
 
         layout = QVBoxLayout(self)
 
-        # --------------------------------------------------------------
-        # Fil d'Ariane + bouton remonter
-        # --------------------------------------------------------------
-
-        nav_layout = QHBoxLayout()
-
-        self.up_button = QPushButton(
-            _("⬆ Up"),
-        )
-
-        self.up_button.setEnabled(
-            self.current_path != "/",
-        )
-
-        self.up_button.clicked.connect(
-            self.request_navigate_up,
-        )
-
-        self.path_label = QLabel(
-            self.current_path,
-        )
-
-        self.path_label.setStyleSheet(
-            "QLabel { font-weight: bold; }",
-        )
-
-        nav_layout.addWidget(self.up_button)
-        nav_layout.addWidget(self.path_label)
-        nav_layout.addStretch()
-
-        layout.addLayout(nav_layout)
-
         label = QLabel(
-            _(
-                "Select files or folders to delete, or open a "
-                "folder to browse it:"
-            ),
+            _("Select the files or folders to delete:"),
         )
 
         layout.addWidget(label)
@@ -639,29 +594,6 @@ class XteinkFilesDialog(QDialog):
         layout.addLayout(buttons)
 
     # ------------------------------------------------------------------
-    # Navigation
-    # ------------------------------------------------------------------
-
-    def request_navigate_into(self, name):
-
-        self.navigate_target = name
-
-        self.done(self.NAVIGATE)
-
-    def request_navigate_up(self):
-
-        self.navigate_target = ".."
-
-        self.done(self.NAVIGATE)
-
-    def full_path(self, name):
-
-        if self.current_path == "/":
-            return "/" + name
-
-        return self.current_path.rstrip("/") + "/" + name
-
-    # ------------------------------------------------------------------
     # Affichage
     # ------------------------------------------------------------------
 
@@ -704,59 +636,29 @@ class XteinkFilesDialog(QDialog):
 
                 checkbox = QCheckBox(text)
 
-                checkbox._xteink_item = item
+            else:
 
-                self.checkboxes.append(checkbox)
+                try:
 
-                open_button = QPushButton(
-                    _("Open"),
-                )
+                    size_mb = (
+                        float(size)
+                        / (1024 * 1024)
+                    )
 
-                open_button.setMaximumWidth(70)
+                    text = _(
+                        "📄 %s  (%.1f MB)",
+                    ) % (
+                        name,
+                        size_mb,
+                    )
 
-                open_button.clicked.connect(
-                    lambda checked=False, n=name:
-                    self.request_navigate_into(n)
-                )
+                except Exception:
 
-                row_layout = QHBoxLayout()
+                    text = _(
+                        "📄 %s",
+                    ) % name
 
-                row_layout.addWidget(
-                    checkbox,
-                    1,
-                )
-
-                row_layout.addWidget(
-                    open_button,
-                )
-
-                self.files_layout.addLayout(
-                    row_layout,
-                )
-
-                continue
-
-            try:
-
-                size_mb = (
-                    float(size)
-                    / (1024 * 1024)
-                )
-
-                text = _(
-                    "📄 %s  (%.1f MB)",
-                ) % (
-                    name,
-                    size_mb,
-                )
-
-            except Exception:
-
-                text = _(
-                    "📄 %s",
-                ) % name
-
-            checkbox = QCheckBox(text)
+                checkbox = QCheckBox(text)
 
             checkbox._xteink_item = item
 
@@ -1854,89 +1756,6 @@ class DeviceManagerDialog(QDialog):
         self.refresh()
 
 
-# ======================================================================
-# DIAGNOSTIC : TEST DE CRÉATION DE DOSSIER
-# ======================================================================
-
-# ======================================================================
-# CRÉATION DE DOSSIER (fonctionnalité réelle, plus le test debug)
-# ======================================================================
-
-class FolderCreateWorker(QThread):
-    """
-    Crée un dossier sur le Xteink X3, y compris imbriqué (ex.
-    "Auteur/Serie"), niveau par niveau — reproduit exactement la
-    séquence qui a été confirmée fonctionnelle par expérimentation
-    directe (curl) : chaque segment du chemin est créé un par un via
-    create_folder(), plutôt que de tenter de créer toute
-    l'arborescence en un seul appel (non testé, donc pas supposé
-    fonctionner tel quel).
-    """
-
-    finished = pyqtSignal(bool, str)
-    failed = pyqtSignal(str)
-
-    def __init__(self, ip, folder_path, parent=None):
-        super().__init__(parent)
-        self.ip = ip
-        self.folder_path = folder_path
-
-    def run(self):
-
-        try:
-
-            segments = [
-                segment
-                for segment in self.folder_path.split("/")
-                if segment
-            ]
-
-            if not segments:
-
-                self.failed.emit(
-                    "Empty folder name."
-                )
-
-                return
-
-            current_path = ""
-
-            for segment in segments:
-
-                parent_path = current_path or "/"
-
-                current_path = current_path + "/" + segment
-
-                create_folder(
-                    self.ip,
-                    current_path,
-                )
-
-                verified = verify_folder_exists(
-                    self.ip,
-                    parent_path,
-                    segment,
-                )
-
-                if not verified:
-
-                    self.finished.emit(
-                        False,
-                        current_path,
-                    )
-
-                    return
-
-            self.finished.emit(
-                True,
-                current_path,
-            )
-
-        except Exception as e:
-
-            self.failed.emit(str(e))
-
-
 class XteinkX3Action(InterfaceAction):
 
     name = "Xteink X3"
@@ -1970,15 +1789,12 @@ class XteinkX3Action(InterfaceAction):
         self.explore_worker = None
         self.reading_progress_worker = None
         self.folder_list_worker = None
-        self.folder_create_worker = None
         self.orphan_scan_worker = None
         self.delete_worker = None
         self.progress = None
 
         self.pending_ids = None
         self.pending_operation = None
-        self.pending_delete_ip = None
-        self.pending_delete_return_path = None
         self.pending_upload_ip = None
         self.pending_upload_books = None
         self.pending_upload_target_folder = None
@@ -2539,10 +2355,6 @@ class XteinkX3Action(InterfaceAction):
             _(
                 "Please put the Xteink X3 into\n"
                 '"PC Transfer" mode.\n\n'
-                "If it was already active, turn it off and back on "
-                "again first — a freshly (re)activated mode "
-                "responds far more reliably than one left on for a "
-                "while.\n\n"
                 "Once the mode is active, click OK."
             ),
             QMessageBox.Ok
@@ -2644,9 +2456,8 @@ class XteinkX3Action(InterfaceAction):
         )
 
         root_label = _("(Root — no folder)")
-        new_label = _("Create new folder...")
 
-        labels = [root_label] + folders + [new_label]
+        labels = [root_label] + folders
 
         selected, ok = QInputDialog.getItem(
             self.gui,
@@ -2667,118 +2478,13 @@ class XteinkX3Action(InterfaceAction):
 
             target_folder = None
 
-            self.continue_upload_with_folder(
-                ip,
-                target_folder,
-            )
+        else:
 
-            return
-
-        if selected == new_label:
-
-            new_folder, ok2 = QInputDialog.getText(
-                self.gui,
-                _("X3 reader management"),
-                _(
-                    'New folder name (e.g. "Author" or '
-                    '"Author/Series" for a nested folder):'
-                ),
-            )
-
-            if not ok2 or not new_folder.strip():
-
-                self.qaction.setEnabled(True)
-
-                return
-
-            new_folder = new_folder.strip().strip("/")
-
-            self.progress = QProgressDialog(
-                _("Creating folder on the Xteink X3..."),
-                None,
-                0,
-                0,
-                self.gui,
-            )
-
-            self.progress.setWindowTitle(
-                _("X3 reader management"),
-            )
-
-            self.progress.setMinimumDuration(0)
-            self.progress.setCancelButton(None)
-
-            self.progress.show()
-
-            self.pending_upload_ip = ip
-
-            self.folder_create_worker = FolderCreateWorker(
-                ip,
-                new_folder,
-                self.gui,
-            )
-
-            self.folder_create_worker.finished.connect(
-                self.folder_create_finished,
-            )
-
-            self.folder_create_worker.failed.connect(
-                self.folder_create_failed,
-            )
-
-            self.folder_create_worker.start()
-
-            return
-
-        target_folder = selected
+            target_folder = selected
 
         self.continue_upload_with_folder(
             ip,
             target_folder,
-        )
-
-    def folder_create_finished(self, verified, path):
-
-        self.folder_create_worker = None
-
-        self.close_progress()
-
-        if not verified:
-
-            self.qaction.setEnabled(True)
-
-            error_dialog(
-                self.gui,
-                _("X3 reader management"),
-                _(
-                    "The Xteink X3 accepted the folder creation "
-                    "request for \"%s\", but it could not be "
-                    "confirmed on the device afterwards. Nothing "
-                    "was sent."
-                ) % path,
-                show=True,
-            )
-
-            return
-
-        self.continue_upload_with_folder(
-            self.pending_upload_ip,
-            path,
-        )
-
-    def folder_create_failed(self, message):
-
-        self.folder_create_worker = None
-
-        self.close_progress()
-
-        self.qaction.setEnabled(True)
-
-        error_dialog(
-            self.gui,
-            _("X3 reader management"),
-            _("Error while creating the folder:\n\n%s") % message,
-            show=True,
         )
 
     def folder_choice_failed(self, message):
@@ -3273,10 +2979,6 @@ class XteinkX3Action(InterfaceAction):
             _(
                 "Please put the Xteink X3 into\n"
                 '"PC Transfer" mode.\n\n'
-                "If it was already active, turn it off and back on "
-                "again first — a freshly (re)activated mode "
-                "responds far more reliably than one left on for a "
-                "while.\n\n"
                 "Once the mode is active, click OK."
             ),
             QMessageBox.Ok
@@ -3445,10 +3147,6 @@ class XteinkX3Action(InterfaceAction):
             _(
                 "Please put the Xteink X3 into\n"
                 '"PC Transfer" mode.\n\n'
-                "If it was already active, turn it off and back on "
-                "again first — a freshly (re)activated mode "
-                "responds far more reliably than one left on for a "
-                "while.\n\n"
                 "Once the mode is active, click OK."
             ),
             QMessageBox.Ok
@@ -3573,10 +3271,6 @@ class XteinkX3Action(InterfaceAction):
             _(
                 "Please put the Xteink X3 into\n"
                 '"PC Transfer" mode.\n\n'
-                "If it was already active, turn it off and back on "
-                "again first — a freshly (re)activated mode "
-                "responds far more reliably than one left on for a "
-                "while.\n\n"
                 "Once the mode is active, click OK."
             ),
             QMessageBox.Ok
@@ -3675,10 +3369,6 @@ class XteinkX3Action(InterfaceAction):
             _(
                 "Please put the Xteink X3 into\n"
                 '"PC Transfer" mode.\n\n'
-                "If it was already active, turn it off and back on "
-                "again first — a freshly (re)activated mode "
-                "responds far more reliably than one left on for a "
-                "while.\n\n"
                 "Once the mode is active, click OK."
             ),
             QMessageBox.Ok
@@ -3785,10 +3475,6 @@ class XteinkX3Action(InterfaceAction):
             _(
                 "Please put the Xteink X3 into\n"
                 '"PC Transfer" mode.\n\n'
-                "If it was already active, turn it off and back on "
-                "again first — a freshly (re)activated mode "
-                "responds far more reliably than one left on for a "
-                "while.\n\n"
                 "Once the mode is active, click OK."
             ),
             QMessageBox.Ok
@@ -3805,7 +3491,7 @@ class XteinkX3Action(InterfaceAction):
 
             self.start_list_files(ip)
 
-    def start_list_files(self, ip, path="/"):
+    def start_list_files(self, ip):
 
         save_ip(ip)
 
@@ -3828,13 +3514,13 @@ class XteinkX3Action(InterfaceAction):
 
         self.list_worker = ListFilesWorker(
             ip,
-            path,
+            "/",
             self.gui,
         )
 
         self.list_worker.finished.connect(
-            lambda files, x=ip, p=path:
-            self.list_files_finished(x, p, files)
+            lambda files, x=ip:
+            self.list_files_finished(x, files)
         )
 
         self.list_worker.failed.connect(
@@ -3847,7 +3533,7 @@ class XteinkX3Action(InterfaceAction):
     # LISTE
     # ==================================================================
 
-    def list_files_finished(self, ip, path, files):
+    def list_files_finished(self, ip, files):
 
         if self.progress:
 
@@ -3895,6 +3581,17 @@ class XteinkX3Action(InterfaceAction):
 
                 visible_files.append(item)
 
+        if not visible_files:
+
+            info_dialog(
+                self.gui,
+                _("X3 reader management"),
+                _("No files or folders found on the Xteink X3."),
+                show=True,
+            )
+
+            return
+
         visible_files.sort(
             key=lambda x: (
                 0 if x.get("type") == "dir" else 1,
@@ -3902,35 +3599,12 @@ class XteinkX3Action(InterfaceAction):
             )
         )
 
-        # On affiche le dialogue même si le dossier est vide : avec la
-        # navigation, un dossier vide n'est plus un cul-de-sac, juste
-        # un endroit d'où l'utilisateur peut remonter (bouton "Up").
         dialog = XteinkFilesDialog(
             self.gui,
             visible_files,
-            current_path=path,
         )
 
         result = dialog.exec()
-
-        if result == XteinkFilesDialog.NAVIGATE:
-
-            if dialog.navigate_target == "..":
-
-                new_path, _name = DeleteWorker.split_path(path)
-
-            else:
-
-                new_path = dialog.full_path(
-                    dialog.navigate_target,
-                )
-
-            self.start_list_files(
-                ip,
-                new_path,
-            )
-
-            return
 
         if result != QDialog.Accepted:
             return
@@ -3952,9 +3626,7 @@ class XteinkX3Action(InterfaceAction):
             if not name:
                 continue
 
-            paths.append(
-                dialog.full_path(name),
-            )
+            paths.append("/" + name)
 
         if not paths:
             return
@@ -4002,7 +3674,6 @@ class XteinkX3Action(InterfaceAction):
         self.start_delete(
             ip,
             paths,
-            return_to_path=path,
         )
 
     def list_files_failed(self, message):
@@ -4026,16 +3697,7 @@ class XteinkX3Action(InterfaceAction):
     # SUPPRESSION
     # ==================================================================
 
-    def start_delete(self, ip, paths, return_to_path=None):
-
-        # Si renseigné, on revient au navigateur de fichiers sur ce
-        # dossier une fois la suppression terminée (utilisé par
-        # "Gérer les livres sur le X3" pour rester dans l'IHM plutôt
-        # que de se retrouver éjecté du plugin après une suppression).
-        # Laissé à None pour les flux qui n'ont pas de navigateur à
-        # rouvrir (vider l'appareil, nettoyage des orphelins).
-        self.pending_delete_ip = ip
-        self.pending_delete_return_path = return_to_path
+    def start_delete(self, ip, paths):
 
         self.progress = QProgressDialog(
             _("Deleting items from the Xteink X3..."),
@@ -4120,20 +3782,6 @@ class XteinkX3Action(InterfaceAction):
                 show=True,
             )
 
-        return_path = self.pending_delete_return_path
-
-        self.pending_delete_return_path = None
-
-        if return_path is not None:
-
-            # Retour au navigateur de fichiers plutôt que de rendre
-            # la main à Calibre : on reliste le dossier (les éléments
-            # supprimés n'y apparaîtront plus).
-            self.start_list_files(
-                self.pending_delete_ip,
-                return_path,
-            )
-
     def delete_failed(self, message):
 
         if self.progress:
@@ -4150,17 +3798,6 @@ class XteinkX3Action(InterfaceAction):
             _("Error while deleting:\n\n%s") % message,
             show=True,
         )
-
-        return_path = self.pending_delete_return_path
-
-        self.pending_delete_return_path = None
-
-        if return_path is not None:
-
-            self.start_list_files(
-                self.pending_delete_ip,
-                return_path,
-            )
 
     # ==================================================================
     # FIN ENVOI

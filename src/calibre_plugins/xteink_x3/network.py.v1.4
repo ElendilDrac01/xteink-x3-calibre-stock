@@ -476,86 +476,6 @@ def scan_network():
 UPLOAD_CHUNK_SIZE = 64 * 1024
 
 
-# ----------------------------------------------------------------------
-# Création de dossier
-# ----------------------------------------------------------------------
-
-def create_folder(ip, path):
-    """
-    Crée un dossier sur le Xteink X3.
-
-    Mécanisme confirmé par expérimentation directe (curl) : une
-    requête PUT sur /edit avec un champ multipart "path" (terminé par
-    un slash), sans aucun contenu de fichier associé. C'est un
-    endpoint à part entière, distinct de l'upload — la tentative
-    précédente (nom de fichier imbriqué dans un POST /edit classique)
-    échouait silencieusement car ce n'est simplement pas ainsi que le
-    firmware crée un dossier.
-    """
-
-    if not path.startswith("/"):
-        path = "/" + path
-
-    if not path.endswith("/"):
-        path = path + "/"
-
-    boundary = "----XteinkX3%s" % uuid.uuid4().hex
-
-    body = (
-        (
-            "--%s\r\n"
-            'Content-Disposition: form-data; name="path"\r\n'
-            "\r\n"
-            "%s\r\n"
-            "--%s--\r\n"
-        ) % (
-            boundary,
-            path,
-            boundary,
-        )
-    ).encode("utf-8")
-
-    request = urllib.request.Request(
-        "http://%s/edit" % ip,
-        data=body,
-        method="PUT",
-        headers={
-            "Content-Type":
-                "multipart/form-data; boundary=%s" % boundary,
-
-            "Content-Length":
-                str(len(body)),
-        },
-    )
-
-    print(
-        "Xteink X3: création du dossier :",
-        path,
-    )
-
-    try:
-
-        with http_opener().open(
-            request,
-            timeout=20,
-        ) as response:
-
-            return response.read().decode(
-                "utf-8",
-                errors="replace",
-            )
-
-    except Exception as e:
-
-        raise XteinkError(
-            "Erreur pendant la création du dossier %s\n\n%s"
-            % (
-                path,
-                e,
-            )
-        )
-
-
 def upload(ip, filename, filepath, progress_callback=None, target_folder=None):
     """
     Envoie un fichier vers le Xteink X3 en le streamant par blocs
@@ -861,41 +781,6 @@ def verify_path_deleted(ip, directory, name):
             return False
 
     return True
-
-
-def verify_folder_exists(ip, parent_directory, name):
-    """
-    Confirme qu'un dossier existe réellement sur le Xteink X3, en
-    relistant son dossier parent après une tentative de création
-    (voir create_folder()).
-    """
-
-    try:
-
-        entries = list_files(
-            ip,
-            parent_directory or "/",
-        )
-
-    except Exception:
-
-        return None
-
-    if not isinstance(entries, list):
-        return None
-
-    for item in entries:
-
-        if not isinstance(item, dict):
-            continue
-
-        if item.get("type") != "dir":
-            continue
-
-        if item.get("name") == name:
-            return True
-
-    return False
 
 
 def verify_file_exists(ip, directory, basename):
